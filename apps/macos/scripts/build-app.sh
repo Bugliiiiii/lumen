@@ -1,0 +1,28 @@
+#!/bin/zsh
+set -euo pipefail
+
+script_dir="${0:A:h}"
+project_dir="${script_dir:h}"
+artifact_dir="$project_dir/artifacts"
+app_dir="$artifact_dir/Monitor Switch.app"
+
+cd "$project_dir"
+export CLANG_MODULE_CACHE_PATH="$project_dir/.build/module-cache"
+export SWIFT_MODULE_CACHE_PATH="$project_dir/.build/module-cache"
+
+swift_args=(-c release)
+if [[ -n "${MONITOR_SWITCH_SDK:-}" ]]; then
+  export SDKROOT="$MONITOR_SWITCH_SDK"
+  swift_args+=(--sdk "$MONITOR_SWITCH_SDK")
+fi
+
+swift build "${swift_args[@]}" --product MonitorSwitchMac
+bin_dir="$(swift build "${swift_args[@]}" --show-bin-path)"
+
+rm -rf "$app_dir"
+mkdir -p "$app_dir/Contents/MacOS" "$app_dir/Contents/Resources"
+cp "$bin_dir/MonitorSwitchMac" "$app_dir/Contents/MacOS/MonitorSwitchMac"
+cp "$project_dir/Resources/Info.plist" "$app_dir/Contents/Info.plist"
+codesign --force --deep --sign - "$app_dir"
+
+echo "$app_dir"

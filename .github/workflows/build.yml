@@ -1,0 +1,38 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  macos:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test macOS client
+        working-directory: apps/macos
+        run: swift run MonitorSwitchMac --self-test
+      - name: Build macOS app
+        working-directory: apps/macos
+        run: ./scripts/build-app.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: monitor-switch-macos
+          path: apps/macos/artifacts/Monitor Switch.app
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test Windows client
+        run: dotnet run --project apps/windows/tests/MonitorSwitch.Windows.Tests/MonitorSwitch.Windows.Tests.csproj
+      - name: Publish Windows client
+        run: dotnet publish apps/windows/src/MonitorSwitch.Windows/MonitorSwitch.Windows.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o artifacts/windows
+      - uses: actions/upload-artifact@v4
+        with:
+          name: monitor-switch-windows
+          path: artifacts/windows/MonitorSwitch.Windows.exe
