@@ -414,7 +414,9 @@ struct ControlCenterPanelView: View {
             Spacer()
             Menu {
                 Button {
-                    resController.setMirror(for: display.displayID, masterID: nil)
+                    if display.isMirrored {
+                        resController.setMirror(for: display.displayID, masterID: nil)
+                    }
                 } label: {
                     HStack {
                         Text("扩展屏幕")
@@ -426,7 +428,9 @@ struct ControlCenterPanelView: View {
 
                 ForEach(otherDisplays) { other in
                     Button {
-                        resController.setMirror(for: display.displayID, masterID: other.displayID)
+                        if !display.isMirrored || display.mirrorMasterID != other.displayID {
+                            resController.setMirror(for: display.displayID, masterID: other.displayID)
+                        }
                     } label: {
                         HStack {
                             Text("镜像 \(other.name)")

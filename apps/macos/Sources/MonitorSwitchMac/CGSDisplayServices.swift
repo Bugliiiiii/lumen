@@ -131,6 +131,7 @@ final class ResolutionController: ObservableObject {
 
     @Published var displays: [ManagedDisplay] = []
     @Published var disconnectedDisplays: [CGDirectDisplayID: ManagedDisplay] = [:]
+    private var savedExtendedModes: [CGDirectDisplayID: DisplayModeItem] = [:]
 
     var activeDisplayCount: Int {
         displays.filter { !$0.isDisconnected }.count
@@ -361,13 +362,38 @@ final class ResolutionController: ObservableObject {
     }
 
     func setMirror(for displayID: CGDirectDisplayID, masterID: CGDirectDisplayID?) {
+        guard let display = displays.first(where: { $0.displayID == displayID }) else { return }
+
+        // 1. Guard against no-op reconfigurations (which cause unnecessary screen resets/flickering)
+        if masterID == nil && !display.isMirrored {
+            return
+        }
+        if let master = masterID, display.isMirrored && display.mirrorMasterID == master {
+            return
+        }
+
+        // 2. If entering mirror mode, record current non-mirrored mode
+        if masterID != nil {
+            if let cur = display.currentMode {
+                savedExtendedModes[displayID] = cur
+            }
+        }
+
         var config: CGDisplayConfigRef?
         guard CGBeginDisplayConfiguration(&config) == .success, let cfg = config else { return }
+
         if let master = masterID {
             CGConfigureDisplayMirrorOfDisplay(cfg, displayID, master)
         } else {
             CGConfigureDisplayMirrorOfDisplay(cfg, displayID, kCGNullDirectDisplay)
+            // Explicitly restore previous extended mode or top recommended native mode (e.g. 2560x1440)
+            // to avoid macOS defaulting to a 4K pseudo-downsampled mode (3840x2160) that overloads HDMI bandwidth and flickers!
+            let restoreMode = savedExtendedModes[displayID] ?? display.topRecommendedMode
+            if let target = restoreMode {
+                _ = CGSConfigureDisplayMode(cfg, displayID, Int32(target.modeNumber))
+            }
         }
+
         let result = CGCompleteDisplayConfiguration(cfg, .forSession)
         if result == .success {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
