@@ -227,6 +227,20 @@ struct ControlCenterPanelView: View {
                             Text("\(cur.width) × \(cur.height) · \(cur.refreshRate) Hz\(hidpiSuffix)")
                                 .font(.system(size: 10))
                                 .foregroundStyle(Color.secondary)
+                                .contextMenu {
+                                    if !display.isBuiltin && hidpiService.isHiDPIInstalled(vendor: display.vendorID, product: display.productID) {
+                                        Button(role: .destructive) {
+                                            Task {
+                                                hidpiService.isWorking = true
+                                                let err = await hidpiService.disableHiDPI(vendor: display.vendorID, product: display.productID)
+                                                hidpiService.statusError = err
+                                                hidpiService.isWorking = false
+                                            }
+                                        } label: {
+                                            Label("移除 2K HiDPI 渲染配置...", systemImage: "trash")
+                                        }
+                                    }
+                                }
                         }
                     }
 
@@ -297,9 +311,11 @@ struct ControlCenterPanelView: View {
 
                         refreshRatePickerRow(for: display)
 
-                        SettingDivider()
+                        if !hidpiService.isHiDPIInstalled(vendor: display.vendorID, product: display.productID) {
+                            SettingDivider()
 
-                        hidpiRow(for: display)
+                            hidpiRow(for: display)
+                        }
                     }
                 }
                 .padding(.top, 1)
@@ -440,36 +456,28 @@ struct ControlCenterPanelView: View {
 
     @ViewBuilder
     private func hidpiRow(for display: ManagedDisplay) -> some View {
-        let isHiDPIInstalled = hidpiService.isHiDPIInstalled(vendor: display.vendorID, product: display.productID)
-
         HStack {
             VStack(alignment: .leading, spacing: 0.5) {
                 Label("2K HiDPI 锐利渲染", systemImage: "sparkles")
                     .font(.system(size: 11.5))
                     .foregroundStyle(Color.primary)
-                Text(isHiDPIInstalled ? "已注入原生视网膜配置" : "点击注入 2K HiDPI 缩放")
+                Text("点击注入 2K HiDPI 缩放")
                     .font(.system(size: 8.5))
                     .foregroundStyle(Color.secondary)
             }
             Spacer()
-            if isHiDPIInstalled {
-                Text("已开启")
-                    .font(.system(size: 10.5))
-                    .foregroundStyle(Color.secondary)
-            } else {
-                Button("开启") {
-                    Task {
-                        hidpiService.isWorking = true
-                        let err = await hidpiService.enableHiDPI(vendor: display.vendorID, product: display.productID)
-                        hidpiService.statusError = err
-                        hidpiService.isWorking = false
-                    }
+            Button("开启") {
+                Task {
+                    hidpiService.isWorking = true
+                    let err = await hidpiService.enableHiDPI(vendor: display.vendorID, product: display.productID)
+                    hidpiService.statusError = err
+                    hidpiService.isWorking = false
                 }
-                .font(.system(size: 10.5))
-                .buttonStyle(.borderedProminent)
-                .controlSize(.mini)
-                .disabled(hidpiService.isWorking)
             }
+            .font(.system(size: 10.5))
+            .buttonStyle(.borderedProminent)
+            .controlSize(.mini)
+            .disabled(hidpiService.isWorking)
         }
         .padding(.horizontal, 4)
         .padding(.vertical, 4)
