@@ -59,6 +59,13 @@ struct DisplayModeItem: Identifiable, Hashable, Sendable {
     }
 }
 
+struct RecommendedMode: Identifiable, Hashable, Sendable {
+    let mode: DisplayModeItem
+    let badge: String       // e.g. "⭐ 最佳推荐", "🌟 宽广工作区", "🖥️ 原生点对点"
+    let subtitle: String    // e.g. "视网膜舒适清晰 (2K 黄金比例)"
+    var id: UInt32 { mode.modeNumber }
+}
+
 struct ManagedDisplay: Identifiable, Equatable {
     let displayID: CGDirectDisplayID
     let name: String
@@ -67,10 +74,22 @@ struct ManagedDisplay: Identifiable, Equatable {
     let vendorID: UInt32
     let productID: UInt32
     var currentMode: DisplayModeItem?
+    var recommendedModes: [RecommendedMode]
+    var standardModes: [DisplayModeItem]
+    var fineTuningModes: [DisplayModeItem]
     var availableResolutions: [DisplayModeItem]
     var availableRefreshRates: [Int]
 
     var id: CGDirectDisplayID { displayID }
+
+    var topRecommendedMode: DisplayModeItem? {
+        recommendedModes.first?.mode
+    }
+
+    var isAtTopRecommended: Bool {
+        guard let cur = currentMode, let top = topRecommendedMode else { return false }
+        return cur.width == top.width && cur.height == top.height && cur.isHiDPI == top.isHiDPI
+    }
 }
 
 // MARK: - ResolutionController
@@ -80,6 +99,17 @@ final class ResolutionController: ObservableObject {
     static let shared = ResolutionController()
 
     @Published var displays: [ManagedDisplay] = []
+
+    private static let standardAspectPairs: Set<String> = [
+        // 16:9
+        "3840 × 2160", "2560 × 1440", "2048 × 1152", "1920 × 1080", "1600 × 900", "1366 × 768", "1280 × 720",
+        // 16:10
+        "2560 × 1600", "1920 × 1200", "1680 × 1050", "1440 × 900", "1280 × 800",
+        // Apple Retina Displays
+        "1800 × 1169", "1710 × 1112", "1710 × 1107", "1536 × 960", "1512 × 982", "1728 × 1117", "1470 × 956", "1352 × 878", "1280 × 832", "1024 × 665",
+        // 21:9 UltraWide
+        "5120 × 2160", "3440 × 1440", "2580 × 1080", "2560 × 1080"
+    ]
 
     init() {
         refreshDisplays()
@@ -130,6 +160,74 @@ final class ResolutionController: ObservableObject {
                 return $0.height > $1.height
             }
 
+            // Identify Recommended Modes
+            var recList: [RecommendedMode] = []
+            if isBuiltin {
+                if let cur = current {
+                    recList.append(RecommendedMode(mode: cur, badge: "⭐ 最佳推荐", subtitle: "Apple 原厂视网膜缩放"))
+                }
+                let presets: [(key: String, badge: String, sub: String)] = [
+                    ("1710 × 1112", "🌟 宽广空间", "更多屏幕内容"),
+                    ("1710 × 1107", "🌟 宽广空间", "更多屏幕内容"),
+                    ("1470 × 956", "⭐ 舒适缩放", "默认视网膜"),
+                    ("1512 × 982", "⭐ 舒适缩放", "默认视网膜"),
+                    ("1280 × 832", "🔍 大字体", "清晰易读")
+                ]
+                for p in presets {
+                    if let m = resolutionMap[p.key], m.width != current?.width || m.height != current?.height {
+                        recList.append(RecommendedMode(mode: m, badge: p.badge, subtitle: p.sub))
+                    }
+                }
+                if recList.isEmpty, let firstHiDPI = sortedResolutions.first(where: { $0.isHiDPI }) {
+                    recList.append(RecommendedMode(mode: firstHiDPI, badge: "⭐ 最佳推荐", subtitle: "视网膜推荐缩放"))
+                }
+            } else {
+                let isKnown2K = (vendor == 0x4d67 || product == 0x2725 || name.contains("H27T22S") || name.contains("2K") || name.contains("QHD"))
+                let isUltraWide = resolutionMap["3440 × 1440"] != nil || resolutionMap["2560 × 1080"] != nil
+                let hasReal4K = !isKnown2K && resolutionMap["3840 × 2160"] != nil && resolutionMap["3840 × 2160"]?.isHiDPI == false
+
+                if isUltraWide {
+                    if let m = resolutionMap["2580 × 1080"] ?? resolutionMap["2560 × 1080"], m.isHiDPI {
+                        recList.append(RecommendedMode(mode: m, badge: "⭐ 最佳推荐", subtitle: "带鱼屏视网膜清晰度"))
+                    }
+                    if let m = resolutionMap["3440 × 1440"] {
+                        recList.append(RecommendedMode(mode: m, badge: "🖥️ 原生点对点", subtitle: "1:1 物理像素"))
+                    }
+                } else if isKnown2K || !hasReal4K {
+                    // 2K Display (like H27T22S 2560x1440) - 1080p HiDPI is the golden ratio!
+                    if let m = resolutionMap["1920 × 1080"], m.isHiDPI {
+                        recList.append(RecommendedMode(mode: m, badge: "⭐ 最佳推荐", subtitle: "视网膜舒适清晰 (2K 黄金比例)"))
+                    }
+                    if let m = resolutionMap["2048 × 1152"], m.isHiDPI {
+                        recList.append(RecommendedMode(mode: m, badge: "🌟 宽广工作区", subtitle: "多任务高效分屏"))
+                    }
+                    if let m = resolutionMap["2560 × 1440"] {
+                        recList.append(RecommendedMode(mode: m, badge: "🖥️ 原生点对点", subtitle: "1:1 物理像素 · 最大视野"))
+                    }
+                } else {
+                    // Real 4K Monitor
+                    if let m = resolutionMap["2560 × 1440"], m.isHiDPI {
+                        recList.append(RecommendedMode(mode: m, badge: "⭐ 最佳推荐", subtitle: "4K 视网膜黄金空间"))
+                    }
+                    if let m = resolutionMap["1920 × 1080"], m.isHiDPI {
+                        recList.append(RecommendedMode(mode: m, badge: "🌟 舒适大字", subtitle: "2x 视网膜清晰度"))
+                    }
+                    if let m = resolutionMap["3840 × 2160"] {
+                        recList.append(RecommendedMode(mode: m, badge: "🖥️ 原生 4K", subtitle: "1:1 物理点对点"))
+                    }
+                }
+            }
+
+            let recKeySet = Set(recList.map { $0.mode.resolutionKey })
+            let standardModes = sortedResolutions.filter { m in
+                let k = m.resolutionKey
+                return Self.standardAspectPairs.contains(k) && !recKeySet.contains(k)
+            }
+            let fineTuningModes = sortedResolutions.filter { m in
+                let k = m.resolutionKey
+                return !Self.standardAspectPairs.contains(k) && !recKeySet.contains(k)
+            }
+
             let currentWidth = current?.width ?? 1920
             let currentHeight = current?.height ?? 1080
             let matchingRates = allModes
@@ -147,6 +245,9 @@ final class ResolutionController: ObservableObject {
                 vendorID: vendor,
                 productID: product,
                 currentMode: current,
+                recommendedModes: recList,
+                standardModes: standardModes,
+                fineTuningModes: fineTuningModes,
                 availableResolutions: sortedResolutions,
                 availableRefreshRates: distinctRates.isEmpty ? [60] : distinctRates
             ))

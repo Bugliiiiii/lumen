@@ -148,8 +148,19 @@ struct ControlCenterPanelView: View {
                         .foregroundStyle(Color.accentColor)
 
                     VStack(alignment: .leading, spacing: 1) {
-                        Text(display.name)
-                            .font(.system(size: 13, weight: .semibold))
+                        HStack(spacing: 5) {
+                            Text(display.name)
+                                .font(.system(size: 13, weight: .semibold))
+                            if display.isAtTopRecommended {
+                                Text("⭐ 最佳")
+                                    .font(.system(size: 9, weight: .bold))
+                                    .padding(.horizontal, 5)
+                                    .padding(.vertical, 1)
+                                    .background(Color.orange.opacity(0.18))
+                                    .foregroundStyle(Color.orange)
+                                    .clipShape(Capsule())
+                            }
+                        }
 
                         if let cur = display.currentMode {
                             Text("\(cur.width) × \(cur.height) @ \(cur.refreshRate)Hz\(cur.isHiDPI ? " (HiDPI)" : "")")
@@ -159,6 +170,25 @@ struct ControlCenterPanelView: View {
                     }
 
                     Spacer()
+
+                    if !display.isAtTopRecommended, let top = display.topRecommendedMode {
+                        Button {
+                            resController.setMode(top, for: display.displayID)
+                        } label: {
+                            HStack(spacing: 3) {
+                                Image(systemName: "sparkles")
+                                    .font(.system(size: 9))
+                                Text("恢复最佳")
+                                    .font(.system(size: 10, weight: .medium))
+                            }
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 3)
+                            .background(Color.orange.opacity(0.15))
+                            .foregroundStyle(Color.orange)
+                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
 
                 // Sliders
@@ -174,8 +204,11 @@ struct ControlCenterPanelView: View {
                         }
                     )
 
-                    // Main Display Row for Built-in
-                    mainDisplayRow(for: display)
+                    // Options for Built-in
+                    VStack(spacing: 4) {
+                        mainDisplayRow(for: display)
+                        resolutionPickerRow(for: display)
+                    }
                 } else {
                     // External Brightness Slider (DDC 0x10)
                     CapsuleSlider(
@@ -205,34 +238,7 @@ struct ControlCenterPanelView: View {
                         mainDisplayRow(for: display)
 
                         // Resolution Picker
-                        HStack {
-                            Label("分辨率", systemImage: "rectangle.inset.filled")
-                                .font(.system(size: 12))
-                            Spacer()
-                            Menu {
-                                ForEach(display.availableResolutions) { mode in
-                                    Button {
-                                        resController.setMode(mode, for: display.displayID)
-                                    } label: {
-                                        HStack {
-                                            Text(mode.displayName)
-                                            if display.currentMode?.width == mode.width && display.currentMode?.height == mode.height {
-                                                Image(systemName: "checkmark")
-                                            }
-                                        }
-                                    }
-                                }
-                            } label: {
-                                Text(display.currentMode?.displayName ?? "选择")
-                                    .font(.system(size: 11))
-                            }
-                            .menuStyle(.borderlessButton)
-                            .fixedSize()
-                        }
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Color.primary.opacity(0.04))
-                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                        resolutionPickerRow(for: display)
 
                         // Refresh Rate Picker
                         HStack {
@@ -321,6 +327,87 @@ struct ControlCenterPanelView: View {
                 .controlSize(.mini)
                 .font(.system(size: 11))
             }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(Color.primary.opacity(0.04))
+        .clipShape(RoundedRectangle(cornerRadius: 6))
+    }
+
+    @ViewBuilder
+    private func resolutionPickerRow(for display: ManagedDisplay) -> some View {
+        HStack {
+            Label("分辨率", systemImage: "rectangle.inset.filled")
+                .font(.system(size: 12))
+            Spacer()
+            Menu {
+                if !display.recommendedModes.isEmpty {
+                    Section("⭐ 推荐分辨率") {
+                        ForEach(display.recommendedModes) { rec in
+                            Button {
+                                resController.setMode(rec.mode, for: display.displayID)
+                            } label: {
+                                HStack {
+                                    Text("\(rec.badge)  \(rec.mode.displayName) · \(rec.subtitle)")
+                                    if display.currentMode?.width == rec.mode.width && display.currentMode?.height == rec.mode.height && display.currentMode?.isHiDPI == rec.mode.isHiDPI {
+                                        Image(systemName: "checkmark")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if !display.standardModes.isEmpty {
+                    Section("常用标准分辨率") {
+                        ForEach(display.standardModes) { mode in
+                            Button {
+                                resController.setMode(mode, for: display.displayID)
+                            } label: {
+                                HStack {
+                                    Text(mode.displayName)
+                                    if display.currentMode?.width == mode.width && display.currentMode?.height == mode.height && display.currentMode?.isHiDPI == mode.isHiDPI {
+                                        Image(systemName: "checkmark")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if !display.fineTuningModes.isEmpty {
+                    Menu("更多微调分辨率 (\(display.fineTuningModes.count)+)...") {
+                        ForEach(display.fineTuningModes) { mode in
+                            Button {
+                                resController.setMode(mode, for: display.displayID)
+                            } label: {
+                                HStack {
+                                    Text(mode.displayName)
+                                    if display.currentMode?.width == mode.width && display.currentMode?.height == mode.height {
+                                        Image(systemName: "checkmark")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Text(display.currentMode?.displayName ?? "选择")
+                        .font(.system(size: 11))
+                    if display.isAtTopRecommended {
+                        Text("最佳")
+                            .font(.system(size: 9, weight: .bold))
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1)
+                            .background(Color.orange.opacity(0.18))
+                            .foregroundStyle(Color.orange)
+                            .clipShape(Capsule())
+                    }
+                }
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
