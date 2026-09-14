@@ -28,4 +28,22 @@ if [[ -f "$project_dir/Resources/AppIcon.icns" ]]; then
 fi
 codesign --force --deep --sign - "$app_dir"
 
+# --- Package DMG ---
+dmg_path="$artifact_dir/Lumen-macOS-arm64.dmg"
+dmg_staging="$artifact_dir/.dmg-staging"
+
+rm -rf "$dmg_staging" "$dmg_path"
+mkdir -p "$dmg_staging"
+cp -R "$app_dir" "$dmg_staging/"
+ln -s /Applications "$dmg_staging/Applications"
+
+hdiutil create -volname "Lumen" \
+  -srcfolder "$dmg_staging" \
+  -ov -format UDZO \
+  -imagekey zlib-level=9 \
+  "$dmg_path"
+
+rm -rf "$dmg_staging"
+
 echo "$app_dir"
+echo "$dmg_path"

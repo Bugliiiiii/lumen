@@ -30,7 +30,7 @@ Lumen 是一款轻量原生的显示器控制中心，为 macOS (Apple Silicon) 
 
 ### macOS (Apple Silicon)
 
-从 [Releases](https://github.com/Bugliiiiii/lumen/releases) 下载 `Lumen-macOS-arm64.zip`，解压后拖入 `/Applications` 即可使用。
+从 [Releases](https://github.com/Bugliiiiii/lumen/releases) 下载 `Lumen-macOS-arm64.dmg`，打开后将 Lumen 拖入 Applications 文件夹即可。
 
 ### Windows (x64)
 
