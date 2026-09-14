@@ -8,7 +8,7 @@ public static partial class CapabilitiesParser
     [GeneratedRegex(@"(?:^|\s)60\s*\(([^)]*)\)", RegexOptions.IgnoreCase)]
     private static partial Regex InputSourceRegex();
 
-    [GeneratedRegex(@"\b(?:0x)?([0-9a-f]{1,2})\b", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"(?<![0-9a-z])(?:0x)?([0-9a-f]{1,2})(?![0-9a-z])", RegexOptions.IgnoreCase)]
     private static partial Regex HexValueRegex();
 
     public static IReadOnlyList<byte> ParseInputSources(string? capabilities)
