@@ -555,7 +555,7 @@ struct ControlCenterPanelView: View {
                 }
 
                 modeSegment(
-                    title: "环境自适应",
+                    title: "原彩显示",
                     icon: controlService.isTrueTone ? "circle.lefthalf.filled" : "circle",
                     isActive: controlService.isTrueTone,
                     tint: Color.teal
