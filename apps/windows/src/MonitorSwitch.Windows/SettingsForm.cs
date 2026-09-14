@@ -29,7 +29,7 @@ internal sealed class SettingsForm : Form
         _pendingModifiers = settings.HotkeyModifiers;
         _pendingKey = settings.HotkeyKey;
 
-        Text = "Monitor Switch";
+        Text = "Lumen";
         Font = new Font("Segoe UI", 10F);
         StartPosition = FormStartPosition.CenterScreen;
         FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -41,7 +41,7 @@ internal sealed class SettingsForm : Form
 
         var title = new Label
         {
-            Text = "Monitor Switch",
+            Text = "Lumen",
             Font = new Font("Segoe UI Semibold", 20F),
             ForeColor = Color.FromArgb(25, 38, 50),
             AutoSize = true,

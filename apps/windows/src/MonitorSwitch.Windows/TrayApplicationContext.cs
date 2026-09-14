@@ -27,7 +27,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
         _trayIcon = new NotifyIcon
         {
             Icon = IconFactory.Create(),
-            Text = "Monitor Switch",
+            Text = "Lumen",
             ContextMenuStrip = menu,
             Visible = true,
         };
@@ -107,7 +107,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
 
     private void ShowError(string message)
     {
-        _trayIcon.BalloonTipTitle = "Monitor Switch";
+        _trayIcon.BalloonTipTitle = "Lumen";
         _trayIcon.BalloonTipText = message;
         _trayIcon.BalloonTipIcon = ToolTipIcon.Warning;
         _trayIcon.ShowBalloonTip(5000);

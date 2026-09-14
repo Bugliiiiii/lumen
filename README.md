@@ -1,77 +1,105 @@
-# Monitor Switch
+# Lumen
 
-Monitor Switch is a pair of small native tray apps for one desk setup:
+> *Lumen* — 拉丁语"光"，物理学中光通量的单位。每一束抵达屏幕的信号，都值得被最纯净地呈现。
 
-- KTC H27T22S
-- Windows PC with an RTX 4060 Ti on DisplayPort 1
-- M5 MacBook Air on HDMI 1 through a UGREEN USB-C to HDMI cable
+Lumen 是一款轻量原生的显示器控制中心，为 macOS (Apple Silicon) 和 Windows 10/11 提供菜单栏 / 系统托盘常驻应用。
 
-Both apps send DDC/CI input-source commands directly through the display cable. They do not share the screen, stream video, control the keyboard or mouse, or communicate over the network.
+## 核心能力
 
-## Default shortcuts
+### 🔀 一键切换输入源
 
-| Platform | Shortcut | Action |
+通过 DDC/CI 协议直接向显示器发送 MCCS VCP `0x60` 指令，在 DisplayPort 和 HDMI 之间瞬间切换，无需触碰显示器按钮。两台电脑共享一块屏幕，一键穿梭。
+
+### 🔍 2K HiDPI 视网膜级缩放
+
+深度集成 macOS SkyLight / CGSDisplayServices 私有框架，为 2K / 4K 外接显示器注入 HiDPI 模式，实现无模糊的视网膜级清晰文字渲染，告别原生缩放的颗粒感。
+
+### 🎛️ 硬件级亮度与音量调节
+
+遵循 MCCS 安全规范，通过 DDC/CI 硬件通道直接控制屏幕亮度 (VCP `0x10`) 和音频音量 (VCP `0x62`)，支持滑块平滑调节。
+
+### 🖥️ 拖拽式屏幕排列
+
+控制中心内置交互式屏幕排列面板，支持直接拖动屏幕缩略图完成多显示器物理位置排列，自动边缘吸附，一键设置主显示器。
+
+### 🪟 Liquid Glass 毛玻璃视觉
+
+菜单栏弹出面板采用 macOS 原生 `NSVisualEffectView` 深度亚克力毛玻璃底衬，搭配半透明卡片与精致边框，呈现控制中心级的视觉质感。
+
+## 快速开始
+
+### macOS (Apple Silicon)
+
+从 [Releases](https://github.com/Bugliiiiii/switch-monitor/releases) 下载 `Lumen-macOS-arm64.zip`，解压后拖入 `/Applications` 即可使用。
+
+### Windows (x64)
+
+从 [Releases](https://github.com/Bugliiiiii/switch-monitor/releases) 下载 `Lumen-Windows-x64.exe`，运行后常驻系统通知区域，无需管理员权限。
+
+## 默认快捷键
+
+| 平台 | 快捷键 | 动作 |
 | --- | --- | --- |
-| Windows | `Ctrl + Alt + S` | Switch to Mac on HDMI 1 |
-| macOS | `Option + Command + S` | Switch to Windows on DisplayPort 1 |
+| Windows | `Ctrl + Alt + S` | 切换到 Mac (HDMI 1) |
+| macOS | `⌥ ⌘ S` | 切换到 Windows (DisplayPort 1) |
 
-The shortcuts and input labels can be changed in each app. The first scan is read-only. Monitor Switch never cycles through unknown input values automatically.
+快捷键和输入源标签均可在各平台应用内自定义。
 
-## Input mapping
+## 输入映射
 
-Monitor Switch uses the standard MCCS input-source VCP code `0x60`.
+Lumen 使用标准 MCCS 输入源 VCP 码 `0x60`：
 
-| Friendly name | Connector | Value |
+| 名称 | 接口 | 值 |
 | --- | --- | --- |
 | Windows | DisplayPort 1 | `0x0F` |
 | Mac | HDMI 1 | `0x11` |
 
-These are the standard MCCS values and the defaults for this setup. The monitor still has to accept input-source writes over both cable paths. In particular, the UGREEN USB-C to HDMI cable must pass DDC/CI traffic.
+## 从源码构建
 
-## Build macOS
+### macOS
 
-Requirements:
-
-- Apple Silicon Mac
-- Swift 6 or newer
-- Internet access for the pinned AppleSiliconDDC package on the first build
+要求：Apple Silicon Mac，Swift 6+
 
 ```sh
 cd apps/macos
-swift run MonitorSwitchMac --self-test
-./scripts/build-app.sh
-open artifacts/Monitor\ Switch.app
+swift run MonitorSwitchMac --self-test   # 运行自检
+./scripts/build-app.sh                   # 构建 Lumen.app
+open artifacts/Lumen.app
 ```
 
-Move the built app to `/Applications` before enabling "Launch at login".
+### Windows
 
-## Build Windows
-
-Requirements:
-
-- Windows 10 or 11
-- .NET 8 SDK
+要求：Windows 10/11，.NET 8 SDK
 
 ```powershell
 dotnet run --project apps/windows/tests/MonitorSwitch.Windows.Tests/MonitorSwitch.Windows.Tests.csproj
-dotnet publish apps/windows/src/MonitorSwitch.Windows/MonitorSwitch.Windows.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o artifacts/windows
+dotnet publish apps/windows/src/MonitorSwitch.Windows/MonitorSwitch.Windows.csproj `
+  -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o artifacts/windows
 ```
 
-Run `MonitorSwitch.Windows.exe`. It stays in the notification area and does not require administrator rights.
+## 首次使用前
 
-## Before the first switch
+1. 在显示器 OSD 菜单中开启 DDC/CI（如果有此选项）。
+2. 打开 Lumen，在两台电脑上分别执行一次「扫描显示器」。
+3. 确认应用能正确读取当前输入源。
+4. 先测试 Windows → Mac 切换，再测试 Mac → Windows。
 
-1. Enable DDC/CI in the H27T22S on-screen menu if that setting is present.
-2. Open Monitor Switch and run "Scan display" on each computer.
-3. Confirm that the app reads the current input.
-4. Test Windows to Mac first. Then test Mac to Windows.
+> 如果 Mac 端扫描无法读取 VCP `0x60`，说明 USB-C 转 HDMI 线缆未透传 DDC/CI 信号。Lumen 会报告该失败，不会尝试盲写。
 
-If the Mac scan cannot read input `0x60`, the USB-C to HDMI conversion is not forwarding DDC/CI. The app reports that failure without attempting a blind write.
+## 安全边界
 
-## Privacy
+- 显示器发现与输入扫描严格只读，绝不通过循环写入来探测端口。
+- 仅写入三个 VCP 码：`0x60`（输入切换，仅响应明确的按钮或快捷键）、`0x10`（亮度）、`0x62`（音量）。
+- 不包含任何网络通信、遥测上报、远程桌面、视频传输或键鼠共享功能。
 
-Monitor Switch has no networking, analytics, account, telemetry, or updater. Settings remain in the current user's local application data.
+## 隐私
 
-## Dependency
+Lumen 没有网络连接、分析追踪、账户体系、遥测上报或自动更新。所有配置仅存储在当前用户的本地应用数据目录中。
 
-The macOS client uses [waydabber/AppleSiliconDDC](https://github.com/waydabber/AppleSiliconDDC) at a pinned revision under its MIT license.
+## 依赖
+
+macOS 客户端使用 [waydabber/AppleSiliconDDC](https://github.com/waydabber/AppleSiliconDDC)（MIT 许可证，锁定特定版本）。
+
+## 许可证
+
+MIT

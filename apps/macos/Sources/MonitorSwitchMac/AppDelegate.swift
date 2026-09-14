@@ -11,13 +11,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let macItem = NSMenuItem(title: "Mac · HDMI 1", action: #selector(switchToMac), keyEquivalent: "")
     private let scanItem = NSMenuItem(title: "扫描显示器", action: #selector(scanDisplay), keyEquivalent: "")
     private let settingsItem = NSMenuItem(title: "设置…", action: #selector(showSettings), keyEquivalent: ",")
-    private let quitItem = NSMenuItem(title: "退出 Monitor Switch", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+    private let quitItem = NSMenuItem(title: "退出 Lumen", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
     private var settingsWindow: NSWindow?
     private let panelController = MenuPanelController()
     private var clickInterceptor: Any?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        ProcessInfo.processInfo.disableAutomaticTermination("Monitor Switch runs continuously in menu bar")
+        ProcessInfo.processInfo.disableAutomaticTermination("Lumen runs continuously in menu bar")
         ProcessInfo.processInfo.disableSuddenTermination()
 
         updateStatusBarIcon()
@@ -82,7 +82,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             let view = SettingsView(model: model)
             let controller = NSHostingController(rootView: view)
             let window = NSWindow(contentViewController: controller)
-            window.title = "Monitor Switch"
+            window.title = "Lumen"
             window.styleMask = [.titled, .closable]
             window.isReleasedWhenClosed = false
             window.center()
@@ -122,14 +122,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if let snapshot = model.snapshot {
             headerItem.title = snapshot.name.isEmpty ? "KTC H27T22S" : snapshot.name
             let friendly = InputSourceCatalog.friendlyName(for: snapshot.currentInput, settings: model.settings)
-            statusItem.button?.toolTip = "Monitor Switch: \(friendly)"
+            statusItem.button?.toolTip = "Lumen: \(friendly)"
         } else if let last = model.lastTargetInput {
             headerItem.title = model.settings.monitorHint.isEmpty ? "KTC H27T22S" : model.settings.monitorHint
             let friendly = InputSourceCatalog.friendlyName(for: last, settings: model.settings)
-            statusItem.button?.toolTip = "Monitor Switch: \(friendly)"
+            statusItem.button?.toolTip = "Lumen: \(friendly)"
         } else {
             headerItem.title = model.settings.monitorHint.isEmpty ? "KTC H27T22S" : model.settings.monitorHint
-            statusItem.button?.toolTip = "Monitor Switch"
+            statusItem.button?.toolTip = "Lumen"
         }
 
         updateStatusBarIcon()

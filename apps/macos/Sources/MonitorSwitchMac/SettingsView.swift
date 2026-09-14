@@ -27,7 +27,7 @@ struct SettingsView: View {
                     .foregroundStyle(Color.accentColor)
 
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("Monitor Switch")
+                    Text("Lumen")
                         .font(.system(size: 16, weight: .bold))
                     Text("显示器 DDC/CI 输入源控制")
                         .font(.caption)

@@ -157,7 +157,7 @@ final class AppModel: ObservableObject {
     private func presentError(_ error: Error) {
         NSApp.requestUserAttention(.informationalRequest)
         let alert = NSAlert()
-        alert.messageText = "Monitor Switch"
+        alert.messageText = "Lumen"
         alert.informativeText = error.localizedDescription
         alert.alertStyle = .warning
         alert.runModal()

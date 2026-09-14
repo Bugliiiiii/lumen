@@ -5,7 +5,7 @@ namespace MonitorSwitch.Windows;
 internal static class StartupManager
 {
     private const string RegistryPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
-    private const string ValueName = "Monitor Switch";
+    private const string ValueName = "Lumen";
 
     internal static bool IsEnabled()
     {

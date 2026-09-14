@@ -4,7 +4,7 @@ set -euo pipefail
 script_dir="${0:A:h}"
 project_dir="${script_dir:h}"
 artifact_dir="$project_dir/artifacts"
-app_dir="$artifact_dir/Monitor Switch.app"
+app_dir="$artifact_dir/Lumen.app"
 
 cd "$project_dir"
 export CLANG_MODULE_CACHE_PATH="$project_dir/.build/module-cache"
