@@ -1,6 +1,58 @@
 import AppKit
 import SwiftUI
 
+// MARK: - Design Tokens & Styles
+
+struct QuietSegmentButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.98 : 1.0)
+            .opacity(configuration.isPressed ? 0.82 : 1.0)
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+    }
+}
+
+struct LiquidGlassPanel<Content: View>: View {
+    var padding: CGFloat = 10
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            content
+        }
+        .padding(padding)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.32))
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(0.16),
+                            Color.white.opacity(0.05)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 0.5
+                )
+        }
+    }
+}
+
+struct SettingDivider: View {
+    var body: some View {
+        Rectangle()
+            .fill(Color.primary.opacity(0.06))
+            .frame(height: 0.5)
+            .padding(.horizontal, 4)
+    }
+}
+
+// MARK: - Control Center Panel View
+
 struct ControlCenterPanelView: View {
     @ObservedObject var appModel: AppModel
     @ObservedObject var resController = ResolutionController.shared
@@ -12,160 +64,169 @@ struct ControlCenterPanelView: View {
     var onQuit: () -> Void
 
     var body: some View {
-        VStack(spacing: 10) {
-            // 1. Dual-Machine Signal Switch Card (King Feature)
+        VStack(spacing: 8) {
+            // 1. Dual-Machine Signal Switcher (Segmented Glass Control)
             signalSwitchSection
 
-            // 2. Connected Displays
-            VStack(spacing: 10) {
-                ForEach(resController.displays) { display in
-                    displaySection(for: display)
-                }
+            // 2. Connected Displays (Liquid Glass Panels)
+            ForEach(resController.displays) { display in
+                displaySection(for: display)
             }
 
-            // 3. Screen Arrangement Card (Displays Layout)
+            // 3. Screen Arrangement (Displays Layout Canvas)
             if arrangementService.placements.count >= 2 {
                 screenArrangementSection
             }
 
-            // 4. System Quick Toggles (Dark Mode, Eye Comfort, Ambient Adaptation)
+            // 4. Quick Toggles (Segmented Glass Control)
             systemQuickToggles
 
-            // 5. Footer Tools
+            // 5. Minimal Footer
             footerSection
         }
-        .padding(12)
-        .frame(width: 330)
+        .padding(10)
+        .frame(width: 320)
         .background(Color.clear)
     }
 
-    // MARK: - Signal Switch Hero Section
+    // MARK: - 1. Signal Switch Section
 
     private var signalSwitchSection: some View {
-        GlassCard {
-            VStack(alignment: .leading, spacing: 8) {
+        LiquidGlassPanel(padding: 8) {
+            VStack(alignment: .leading, spacing: 6) {
                 HStack {
-                    Text("输入源切换")
+                    Text("输入源")
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                        .textCase(.uppercase)
+                        .foregroundStyle(Color.secondary)
 
                     Spacer()
 
                     Text(appModel.settings.shortcutText)
-                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                        .font(.system(size: 10, weight: .regular))
+                        .foregroundStyle(Color.secondary.opacity(0.85))
                         .padding(.horizontal, 5)
-                        .padding(.vertical, 2)
-                        .background(Color.primary.opacity(0.08))
-                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                        .padding(.vertical, 1.5)
+                        .background(Color.primary.opacity(0.05))
+                        .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
                 }
 
                 let activeInput = appModel.snapshot?.currentInput ?? appModel.lastTargetInput
                 let isWindowsActive = activeInput == appModel.settings.windowsInput
                 let isMacActive = activeInput == appModel.settings.macInput
 
-                HStack(spacing: 8) {
-                    // Windows Button
-                    Button {
+                HStack(spacing: 3) {
+                    inputSegment(
+                        title: appModel.settings.windowsLabel,
+                        connector: InputSourceCatalog.connectorName(for: appModel.settings.windowsInput),
+                        icon: "desktopcomputer",
+                        isActive: isWindowsActive
+                    ) {
                         appModel.switchToWindows()
-                    } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: "desktopcomputer")
-                                .font(.system(size: 14))
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text(appModel.settings.windowsLabel)
-                                    .font(.system(size: 12, weight: .semibold))
-                                Text(InputSourceCatalog.connectorName(for: appModel.settings.windowsInput))
-                                    .font(.system(size: 9))
-                                    .opacity(0.8)
-                            }
-                            Spacer()
-                            if isWindowsActive {
-                                Image(systemName: "checkmark")
-                                    .font(.system(size: 11, weight: .bold))
-                            }
-                        }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 8)
-                        .frame(maxWidth: .infinity)
-                        .background(isWindowsActive ? Color.accentColor : Color.primary.opacity(0.05))
-                        .foregroundStyle(isWindowsActive ? Color.white : Color.primary)
-                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .stroke(isWindowsActive ? Color.clear : Color.white.opacity(0.12), lineWidth: 0.5)
-                        }
                     }
-                    .buttonStyle(.plain)
 
-                    // Mac Button
-                    Button {
+                    inputSegment(
+                        title: appModel.settings.macLabel,
+                        connector: InputSourceCatalog.connectorName(for: appModel.settings.macInput),
+                        icon: "laptopcomputer",
+                        isActive: isMacActive
+                    ) {
                         appModel.switchToMac()
-                    } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: "laptopcomputer")
-                                .font(.system(size: 14))
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text(appModel.settings.macLabel)
-                                    .font(.system(size: 12, weight: .semibold))
-                                Text(InputSourceCatalog.connectorName(for: appModel.settings.macInput))
-                                    .font(.system(size: 9))
-                                    .opacity(0.8)
-                            }
-                            Spacer()
-                            if isMacActive {
-                                Image(systemName: "checkmark")
-                                    .font(.system(size: 11, weight: .bold))
-                            }
-                        }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 8)
-                        .frame(maxWidth: .infinity)
-                        .background(isMacActive ? Color.accentColor : Color.primary.opacity(0.05))
-                        .foregroundStyle(isMacActive ? Color.white : Color.primary)
-                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .stroke(isMacActive ? Color.clear : Color.white.opacity(0.12), lineWidth: 0.5)
-                        }
                     }
-                    .buttonStyle(.plain)
+                }
+                .padding(2.5)
+                .background(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(Color.primary.opacity(0.04))
+                )
+                .overlay {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .stroke(Color.white.opacity(0.08), lineWidth: 0.5)
                 }
             }
         }
     }
 
-    // MARK: - Display Section
+    @ViewBuilder
+    private func inputSegment(
+        title: String,
+        connector: String,
+        icon: String,
+        isActive: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 7) {
+                Image(systemName: icon)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(isActive ? Color.accentColor : Color.primary.opacity(0.7))
+
+                VStack(alignment: .leading, spacing: 0.5) {
+                    Text(title)
+                        .font(.system(size: 11.5, weight: isActive ? .semibold : .regular))
+                        .foregroundStyle(Color.primary)
+                    Text(connector)
+                        .font(.system(size: 9))
+                        .foregroundStyle(Color.secondary)
+                }
+
+                Spacer(minLength: 0)
+
+                if isActive {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 9.5, weight: .bold))
+                        .foregroundStyle(Color.accentColor)
+                }
+            }
+            .padding(.horizontal, 9)
+            .padding(.vertical, 6)
+            .frame(maxWidth: .infinity)
+            .background(
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(isActive ? Color.accentColor.opacity(0.12) : Color.clear)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .stroke(isActive ? Color.accentColor.opacity(0.3) : Color.clear, lineWidth: 0.5)
+            }
+        }
+        .buttonStyle(QuietSegmentButtonStyle())
+    }
+
+    // MARK: - 2. Display Section
 
     @ViewBuilder
     private func displaySection(for display: ManagedDisplay) -> some View {
-        GlassCard {
-            VStack(alignment: .leading, spacing: 8) {
-                // Display Title & Subtitle
-                HStack(spacing: 8) {
+        LiquidGlassPanel(padding: 9) {
+            VStack(alignment: .leading, spacing: 7) {
+                // Header: Icon + Name + Spec
+                HStack(alignment: .top, spacing: 7) {
                     Image(systemName: display.isBuiltin ? "laptopcomputer" : "display")
-                        .font(.system(size: 14))
+                        .font(.system(size: 14, weight: .regular))
                         .foregroundStyle(Color.accentColor)
+                        .padding(.top, 1)
 
-                    VStack(alignment: .leading, spacing: 1) {
+                    VStack(alignment: .leading, spacing: 1.5) {
                         HStack(spacing: 5) {
                             Text(display.name)
-                                .font(.system(size: 13, weight: .semibold))
+                                .font(.system(size: 12.5, weight: .semibold))
+                                .foregroundStyle(Color.primary)
+
                             if display.isAtTopRecommended {
-                                Text("⭐ 最佳")
-                                    .font(.system(size: 9, weight: .bold))
-                                    .padding(.horizontal, 5)
+                                Text("推荐")
+                                    .font(.system(size: 8.5, weight: .medium))
+                                    .foregroundStyle(Color.secondary)
+                                    .padding(.horizontal, 4)
                                     .padding(.vertical, 1)
-                                    .background(Color.orange.opacity(0.18))
-                                    .foregroundStyle(Color.orange)
+                                    .background(Color.primary.opacity(0.06))
                                     .clipShape(Capsule())
                             }
                         }
 
                         if let cur = display.currentMode {
-                            Text("\(cur.width) × \(cur.height) @ \(cur.refreshRate)Hz\(cur.isHiDPI ? " (HiDPI)" : "")")
+                            let hidpiSuffix = cur.isHiDPI ? " · HiDPI" : ""
+                            Text("\(cur.width) × \(cur.height) · \(cur.refreshRate) Hz\(hidpiSuffix)")
                                 .font(.system(size: 10))
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(Color.secondary)
                         }
                     }
 
@@ -177,129 +238,71 @@ struct ControlCenterPanelView: View {
                         } label: {
                             HStack(spacing: 3) {
                                 Image(systemName: "sparkles")
-                                    .font(.system(size: 9))
-                                Text("恢复最佳")
-                                    .font(.system(size: 10, weight: .medium))
+                                    .font(.system(size: 8))
+                                Text("恢复推荐")
+                                    .font(.system(size: 9.5, weight: .medium))
                             }
+                            .foregroundStyle(Color.secondary)
                             .padding(.horizontal, 6)
-                            .padding(.vertical, 3)
-                            .background(Color.orange.opacity(0.15))
-                            .foregroundStyle(Color.orange)
-                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                            .padding(.vertical, 2.5)
+                            .background(Color.primary.opacity(0.06))
+                            .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(QuietSegmentButtonStyle())
                     }
                 }
 
                 // Sliders
                 if display.isBuiltin {
-                    // Internal Brightness Slider
-                    CapsuleSlider(
+                    RefinedSlider(
                         value: $controlService.internalBrightness,
                         range: 0...100,
                         leftIcon: "sun.min",
-                        rightIcon: "sun.max",
-                        onChanged: { val in
-                            controlService.setInternalBrightness(val)
-                        }
-                    )
-
-                    // Options for Built-in
-                    VStack(spacing: 4) {
-                        mainDisplayRow(for: display)
-                        resolutionPickerRow(for: display)
+                        rightIcon: "sun.max"
+                    ) { val in
+                        controlService.setInternalBrightness(val)
                     }
                 } else {
-                    // External Brightness Slider (DDC 0x10)
-                    CapsuleSlider(
-                        value: $controlService.externalBrightness,
-                        range: 0...100,
-                        leftIcon: "sun.min",
-                        rightIcon: "sun.max",
-                        onChanged: { val in
+                    VStack(spacing: 4) {
+                        RefinedSlider(
+                            value: $controlService.externalBrightness,
+                            range: 0...100,
+                            leftIcon: "sun.min",
+                            rightIcon: "sun.max"
+                        ) { val in
                             controlService.setExternalBrightness(val)
                         }
-                    )
 
-                    // External Volume Slider (DDC 0x62)
-                    CapsuleSlider(
-                        value: $controlService.externalVolume,
-                        range: 0...100,
-                        leftIcon: "speaker.wave.1",
-                        rightIcon: "speaker.wave.3",
-                        onChanged: { val in
+                        RefinedSlider(
+                            value: $controlService.externalVolume,
+                            range: 0...100,
+                            leftIcon: "speaker.wave.1",
+                            rightIcon: "speaker.wave.3"
+                        ) { val in
                             controlService.setExternalVolume(val)
                         }
-                    )
-
-                    // Options List (Main Display, Resolution, Refresh Rate, HiDPI)
-                    VStack(spacing: 4) {
-                        // Main Display Setting Row
-                        mainDisplayRow(for: display)
-
-                        // Resolution Picker
-                        resolutionPickerRow(for: display)
-
-                        // Refresh Rate Picker
-                        HStack {
-                            Label("刷新率", systemImage: "waveform.path.ecg")
-                                .font(.system(size: 12))
-                            Spacer()
-                            Menu {
-                                ForEach(display.availableRefreshRates, id: \.self) { rate in
-                                    Button {
-                                        resController.setRefreshRate(rate, for: display.displayID)
-                                    } label: {
-                                        HStack {
-                                            Text("\(rate) Hz")
-                                            if display.currentMode?.refreshRate == rate {
-                                                Image(systemName: "checkmark")
-                                            }
-                                        }
-                                    }
-                                }
-                            } label: {
-                                Text("\(display.currentMode?.refreshRate ?? 60) Hz")
-                                    .font(.system(size: 11))
-                            }
-                            .menuStyle(.borderlessButton)
-                            .fixedSize()
-                        }
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Color.primary.opacity(0.04))
-                        .clipShape(RoundedRectangle(cornerRadius: 6))
-
-                        // HiDPI Smooth Scaling Injector
-                        let isHiDPIInstalled = hidpiService.isHiDPIInstalled(vendor: display.vendorID, product: display.productID)
-
-                        HStack {
-                            VStack(alignment: .leading, spacing: 1) {
-                                Label("2K HiDPI 锐利渲染", systemImage: "sparkles")
-                                    .font(.system(size: 12))
-                                Text(isHiDPIInstalled ? "已注入原生视网膜配置" : "点击注入 2K HiDPI 缩放")
-                                    .font(.system(size: 9))
-                                    .foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            Button(isHiDPIInstalled ? "已开启" : "开启") {
-                                Task {
-                                    hidpiService.isWorking = true
-                                    let err = await hidpiService.enableHiDPI(vendor: display.vendorID, product: display.productID)
-                                    hidpiService.statusError = err
-                                    hidpiService.isWorking = false
-                                }
-                            }
-                            .buttonStyle(.borderedProminent)
-                            .controlSize(.small)
-                            .disabled(isHiDPIInstalled || hidpiService.isWorking)
-                        }
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 5)
-                        .background(Color.primary.opacity(0.04))
-                        .clipShape(RoundedRectangle(cornerRadius: 6))
                     }
                 }
+
+                // Setting Rows with thin native dividers
+                VStack(spacing: 0) {
+                    mainDisplayRow(for: display)
+
+                    SettingDivider()
+
+                    resolutionPickerRow(for: display)
+
+                    if !display.isBuiltin {
+                        SettingDivider()
+
+                        refreshRatePickerRow(for: display)
+
+                        SettingDivider()
+
+                        hidpiRow(for: display)
+                    }
+                }
+                .padding(.top, 1)
             }
         }
     }
@@ -308,41 +311,41 @@ struct ControlCenterPanelView: View {
     private func mainDisplayRow(for display: ManagedDisplay) -> some View {
         HStack {
             Label("主显示器", systemImage: "m.circle")
-                .font(.system(size: 12))
+                .font(.system(size: 11.5))
+                .foregroundStyle(Color.primary)
             Spacer()
             if display.isMain {
-                HStack(spacing: 4) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 12))
+                HStack(spacing: 3) {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 9.5, weight: .bold))
                         .foregroundStyle(Color.accentColor)
                     Text("当前主屏幕")
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.system(size: 10.5, weight: .medium))
                         .foregroundStyle(Color.accentColor)
                 }
             } else {
                 Button("设为主显示器") {
                     resController.setMainDisplay(displayID: display.displayID)
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.mini)
-                .font(.system(size: 11))
+                .font(.system(size: 10.5))
+                .buttonStyle(.borderless)
+                .foregroundStyle(Color.accentColor)
             }
         }
-        .padding(.horizontal, 8)
+        .padding(.horizontal, 4)
         .padding(.vertical, 4)
-        .background(Color.primary.opacity(0.04))
-        .clipShape(RoundedRectangle(cornerRadius: 6))
     }
 
     @ViewBuilder
     private func resolutionPickerRow(for display: ManagedDisplay) -> some View {
         HStack {
             Label("分辨率", systemImage: "rectangle.inset.filled")
-                .font(.system(size: 12))
+                .font(.system(size: 11.5))
+                .foregroundStyle(Color.primary)
             Spacer()
             Menu {
                 if !display.recommendedModes.isEmpty {
-                    Section("⭐ 推荐分辨率") {
+                    Section("⭐ 推荐最佳分辨率") {
                         ForEach(display.recommendedModes) { rec in
                             Button {
                                 resController.setMode(rec.mode, for: display.displayID)
@@ -392,47 +395,99 @@ struct ControlCenterPanelView: View {
                     }
                 }
             } label: {
-                HStack(spacing: 4) {
-                    Text(display.currentMode?.displayName ?? "选择")
-                        .font(.system(size: 11))
-                    if display.isAtTopRecommended {
-                        Text("最佳")
-                            .font(.system(size: 9, weight: .bold))
-                            .padding(.horizontal, 4)
-                            .padding(.vertical, 1)
-                            .background(Color.orange.opacity(0.18))
-                            .foregroundStyle(Color.orange)
-                            .clipShape(Capsule())
-                    }
-                }
+                Text(display.currentMode?.displayName ?? "选择")
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(Color.secondary)
             }
             .menuStyle(.borderlessButton)
             .fixedSize()
         }
-        .padding(.horizontal, 8)
+        .padding(.horizontal, 4)
         .padding(.vertical, 4)
-        .background(Color.primary.opacity(0.04))
-        .clipShape(RoundedRectangle(cornerRadius: 6))
     }
 
-    // MARK: - Screen Arrangement Section
+    @ViewBuilder
+    private func refreshRatePickerRow(for display: ManagedDisplay) -> some View {
+        HStack {
+            Label("刷新率", systemImage: "waveform.path.ecg")
+                .font(.system(size: 11.5))
+                .foregroundStyle(Color.primary)
+            Spacer()
+            Menu {
+                ForEach(display.availableRefreshRates, id: \.self) { rate in
+                    Button {
+                        resController.setRefreshRate(rate, for: display.displayID)
+                    } label: {
+                        HStack {
+                            Text("\(rate) Hz")
+                            if display.currentMode?.refreshRate == rate {
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+                }
+            } label: {
+                Text("\(display.currentMode?.refreshRate ?? 60) Hz")
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(Color.secondary)
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+        }
+        .padding(.horizontal, 4)
+        .padding(.vertical, 4)
+    }
+
+    @ViewBuilder
+    private func hidpiRow(for display: ManagedDisplay) -> some View {
+        let isHiDPIInstalled = hidpiService.isHiDPIInstalled(vendor: display.vendorID, product: display.productID)
+
+        HStack {
+            VStack(alignment: .leading, spacing: 0.5) {
+                Label("2K HiDPI 锐利渲染", systemImage: "sparkles")
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(Color.primary)
+                Text(isHiDPIInstalled ? "已注入原生视网膜配置" : "点击注入 2K HiDPI 缩放")
+                    .font(.system(size: 8.5))
+                    .foregroundStyle(Color.secondary)
+            }
+            Spacer()
+            if isHiDPIInstalled {
+                Text("已开启")
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(Color.secondary)
+            } else {
+                Button("开启") {
+                    Task {
+                        hidpiService.isWorking = true
+                        let err = await hidpiService.enableHiDPI(vendor: display.vendorID, product: display.productID)
+                        hidpiService.statusError = err
+                        hidpiService.isWorking = false
+                    }
+                }
+                .font(.system(size: 10.5))
+                .buttonStyle(.borderedProminent)
+                .controlSize(.mini)
+                .disabled(hidpiService.isWorking)
+            }
+        }
+        .padding(.horizontal, 4)
+        .padding(.vertical, 4)
+    }
+
+    // MARK: - 3. Screen Arrangement Section
 
     private var screenArrangementSection: some View {
-        GlassCard {
-            VStack(alignment: .leading, spacing: 8) {
+        LiquidGlassPanel(padding: 8) {
+            VStack(alignment: .leading, spacing: 6) {
                 HStack(alignment: .center) {
                     Label("屏幕排列", systemImage: "rectangle.split.2x1")
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                        .textCase(.uppercase)
-
-                    Text("· 拖动方块调整")
-                        .font(.system(size: 10))
-                        .foregroundStyle(.secondary.opacity(0.8))
+                        .foregroundStyle(Color.secondary)
 
                     Spacer()
 
-                    // Main Display Menu
+                    // Main Display Switcher Dropdown
                     Menu {
                         ForEach(arrangementService.placements) { p in
                             Button {
@@ -448,67 +503,62 @@ struct ControlCenterPanelView: View {
                             }
                         }
                     } label: {
-                        HStack(spacing: 3) {
-                            let mainP = arrangementService.placements.first(where: { $0.isMain })
-                            let mainName = mainP?.name ?? "主屏"
-                            let shortName = mainName.contains("内建") ? "内建" : (mainName.components(separatedBy: " ").first ?? "外接")
-                            Text("主屏: \(shortName)")
-                            Image(systemName: "chevron.up.chevron.down")
-                                .font(.system(size: 8))
-                        }
-                        .font(.system(size: 11, weight: .medium))
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 3)
-                        .background(Color.primary.opacity(0.06))
-                        .clipShape(RoundedRectangle(cornerRadius: 5))
+                        let mainP = arrangementService.placements.first(where: { $0.isMain })
+                        let mainName = mainP?.name ?? "主屏"
+                        let shortName = mainName.contains("内建") ? "内建" : (mainName.components(separatedBy: " ").first ?? "外接")
+                        Text("主屏: \(shortName)")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(Color.secondary)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(Color.primary.opacity(0.05))
+                            .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
                     }
                     .menuStyle(.borderlessButton)
+                    .fixedSize()
                 }
 
                 // Visual Arrangement Canvas with live dragging
                 ArrangementMiniCanvas(service: arrangementService)
-                    .frame(height: 92)
-                    .background(Color.primary.opacity(0.04))
-                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .frame(height: 80)
+                    .background(Color.primary.opacity(0.025))
+                    .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
                     .overlay {
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
+                        RoundedRectangle(cornerRadius: 7, style: .continuous)
+                            .stroke(Color.white.opacity(0.06), lineWidth: 0.5)
                     }
             }
         }
     }
 
-    // MARK: - Quick Toggles
+    // MARK: - 4. Quick Toggles (Segmented Glass Control)
 
     private var systemQuickToggles: some View {
-        GlassCard {
-            HStack(spacing: 8) {
-                // 1. 深色模式
-                toggleButton(
+        LiquidGlassPanel(padding: 3) {
+            HStack(spacing: 2.5) {
+                modeSegment(
                     title: "深色模式",
                     icon: controlService.isDarkMode ? "moon.fill" : "moon",
                     isActive: controlService.isDarkMode,
-                    activeColor: .blue
+                    tint: Color.blue
                 ) {
                     controlService.toggleDarkMode()
                 }
 
-                // 2. 护眼模式 (原 夜览)
-                toggleButton(
+                modeSegment(
                     title: "护眼模式",
                     icon: controlService.isNightShift ? "sun.max.fill" : "sun.max",
                     isActive: controlService.isNightShift,
-                    activeColor: .orange
+                    tint: Color.orange
                 ) {
                     controlService.toggleNightShift()
                 }
 
-                // 3. 环境色自适应 (原 原彩显示)
-                toggleButton(
-                    title: "环境色自适应",
+                modeSegment(
+                    title: "环境自适应",
                     icon: controlService.isTrueTone ? "circle.lefthalf.filled" : "circle",
                     isActive: controlService.isTrueTone,
-                    activeColor: .cyan
+                    tint: Color.teal
                 ) {
                     controlService.toggleTrueTone()
                 }
@@ -517,50 +567,51 @@ struct ControlCenterPanelView: View {
     }
 
     @ViewBuilder
-    private func toggleButton(
+    private func modeSegment(
         title: String,
         icon: String,
         isActive: Bool,
-        activeColor: Color,
+        tint: Color,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
-            VStack(spacing: 5) {
+            HStack(spacing: 4) {
                 Image(systemName: icon)
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(isActive ? activeColor : Color.primary)
+                    .font(.system(size: 11.5, weight: isActive ? .medium : .regular))
+                    .foregroundStyle(isActive ? tint : Color.secondary)
 
                 Text(title)
-                    .font(.system(size: 10, weight: isActive ? .medium : .regular))
+                    .font(.system(size: 10.5, weight: isActive ? .medium : .regular))
                     .foregroundStyle(isActive ? Color.primary : Color.secondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 8)
-            .background(isActive ? activeColor.opacity(0.12) : Color.primary.opacity(0.04))
-            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .padding(.vertical, 5)
+            .background(
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(isActive ? tint.opacity(0.12) : Color.clear)
+            )
             .overlay {
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .stroke(isActive ? activeColor.opacity(0.35) : Color.white.opacity(0.1), lineWidth: 0.5)
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .stroke(isActive ? tint.opacity(0.28) : Color.clear, lineWidth: 0.5)
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(QuietSegmentButtonStyle())
     }
 
-    // MARK: - Footer
+    // MARK: - 5. Footer
 
     private var footerSection: some View {
         HStack {
             Button {
                 onOpenSettings()
             } label: {
-                HStack(spacing: 4) {
+                HStack(spacing: 3) {
                     Image(systemName: "gearshape")
+                        .font(.system(size: 10.5))
                     Text("设置…")
+                        .font(.system(size: 10.5))
                 }
-                .font(.system(size: 11))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color.secondary)
             }
             .buttonStyle(.plain)
 
@@ -570,33 +621,77 @@ struct ControlCenterPanelView: View {
                 onQuit()
             } label: {
                 Text("退出")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(Color.secondary)
             }
             .buttonStyle(.plain)
         }
         .padding(.horizontal, 4)
+        .padding(.top, 1)
     }
 }
 
-// MARK: - Glass Card Container
+// MARK: - Refined Slider
 
-struct GlassCard<Content: View>: View {
-    @ViewBuilder let content: Content
+struct RefinedSlider: View {
+    @Binding var value: Double
+    let range: ClosedRange<Double>
+    let leftIcon: String
+    let rightIcon: String
+    var onChanged: (Double) -> Void
 
     var body: some View {
-        VStack(spacing: 0) {
-            content
+        HStack(spacing: 7) {
+            Image(systemName: leftIcon)
+                .font(.system(size: 10.5, weight: .regular))
+                .foregroundStyle(Color.secondary.opacity(0.85))
+                .frame(width: 12)
+
+            GeometryReader { geo in
+                let totalWidth = geo.size.width
+                let percent = CGFloat((value - range.lowerBound) / (range.upperBound - range.lowerBound))
+                let clampedPercent = max(0, min(1, percent))
+                let fillWidth = totalWidth * clampedPercent
+                let knobX = min(max(fillWidth, 6), totalWidth - 6)
+
+                ZStack(alignment: .leading) {
+                    // Track background
+                    Capsule()
+                        .fill(Color.primary.opacity(0.09))
+                        .frame(height: 3.5)
+
+                    // Track fill
+                    Capsule()
+                        .fill(Color.accentColor.opacity(0.8))
+                        .frame(width: fillWidth, height: 3.5)
+
+                    // Circular Knob
+                    Circle()
+                        .fill(Color.white)
+                        .frame(width: 12, height: 12)
+                        .shadow(color: Color.black.opacity(0.18), radius: 1.5, x: 0, y: 0.8)
+                        .position(x: knobX, y: geo.size.height / 2)
+                }
+                .frame(height: geo.size.height)
+                .contentShape(Rectangle())
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { gesture in
+                            let newPercent = max(0, min(1, gesture.location.x / totalWidth))
+                            let newValue = range.lowerBound + Double(newPercent) * (range.upperBound - range.lowerBound)
+                            value = newValue
+                            onChanged(newValue)
+                        }
+                )
+            }
+            .frame(height: 16)
+
+            Image(systemName: rightIcon)
+                .font(.system(size: 10.5, weight: .regular))
+                .foregroundStyle(Color.secondary.opacity(0.85))
+                .frame(width: 12)
         }
-        .padding(10)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.40))
-        )
-        .overlay {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(Color.white.opacity(0.18), lineWidth: 0.5)
-        }
+        .padding(.horizontal, 2)
     }
 }
 
@@ -622,24 +717,24 @@ struct ArrangementMiniCanvas: View {
                             let offsetY = isDragged ? service.dragOffset.height : 0
 
                             thumbnail(for: p, rect: rect, isDragged: isDragged)
-                                .frame(width: max(rect.width, 56), height: max(rect.height, 38))
+                                .frame(width: max(rect.width, 52), height: max(rect.height, 34))
                                 .position(x: rect.midX + offsetX, y: rect.midY + offsetY)
                                 .zIndex(isDragged ? 10 : 1)
                                 .gesture(
                                     DragGesture(minimumDistance: 0)
-                                        .onChanged { gesture in
-                                            service.draggedID = p.id
-                                            service.dragOffset = gesture.translation
-                                        }
-                                        .onEnded { gesture in
-                                            let moved = abs(gesture.translation.width) + abs(gesture.translation.height)
-                                            if moved > 4 {
-                                                _ = service.applyDrag(for: p.id, translation: gesture.translation, scale: scale)
-                                            }
-                                            service.draggedID = nil
-                                            service.dragOffset = .zero
-                                        }
-                                )
+                                         .onChanged { gesture in
+                                             service.draggedID = p.id
+                                             service.dragOffset = gesture.translation
+                                         }
+                                         .onEnded { gesture in
+                                             let moved = abs(gesture.translation.width) + abs(gesture.translation.height)
+                                             if moved > 4 {
+                                                 _ = service.applyDrag(for: p.id, translation: gesture.translation, scale: scale)
+                                             }
+                                             service.draggedID = nil
+                                             service.dragOffset = .zero
+                                         }
+                                 )
                         }
                     }
                 }
@@ -652,50 +747,50 @@ struct ArrangementMiniCanvas: View {
     private func thumbnail(for p: DisplayPlacement, rect: CGRect, isDragged: Bool) -> some View {
         ZStack {
             // Monitor Frame
-            RoundedRectangle(cornerRadius: 6, style: .continuous)
+            RoundedRectangle(cornerRadius: 5, style: .continuous)
                 .fill(
                     isDragged
-                        ? Color.accentColor.opacity(0.25)
-                        : (p.isMain ? Color.accentColor.opacity(0.15) : Color.primary.opacity(0.08))
+                        ? Color.accentColor.opacity(0.18)
+                        : (p.isMain ? Color.accentColor.opacity(0.10) : Color.primary.opacity(0.05))
                 )
                 .overlay {
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    RoundedRectangle(cornerRadius: 5, style: .continuous)
                         .stroke(
                             isDragged
                                 ? Color.accentColor
-                                : (p.isMain ? Color.accentColor.opacity(0.6) : Color.white.opacity(0.25)),
-                            lineWidth: isDragged ? 1.5 : (p.isMain ? 1 : 0.5)
+                                : (p.isMain ? Color.accentColor.opacity(0.55) : Color.white.opacity(0.18)),
+                            lineWidth: isDragged ? 1.2 : (p.isMain ? 0.9 : 0.5)
                         )
                 }
-                .shadow(color: Color.black.opacity(isDragged ? 0.2 : 0.05), radius: isDragged ? 6 : 2, x: 0, y: isDragged ? 3 : 1)
+                .shadow(color: Color.black.opacity(isDragged ? 0.15 : 0.04), radius: isDragged ? 4 : 1.5, x: 0, y: isDragged ? 2 : 0.5)
 
             // Main Menu Bar Stripe
             if p.isMain {
                 VStack {
-                    RoundedRectangle(cornerRadius: 1.5)
-                        .fill(Color.white.opacity(0.9))
-                        .frame(height: 3)
-                        .padding(.horizontal, 3)
-                        .padding(.top, 2.5)
+                    RoundedRectangle(cornerRadius: 1)
+                        .fill(Color.white.opacity(0.85))
+                        .frame(height: 2.5)
+                        .padding(.horizontal, 2.5)
+                        .padding(.top, 2)
                     Spacer()
                 }
             }
 
             // Monitor Icon & Text
-            VStack(spacing: 2) {
+            VStack(spacing: 1.5) {
                 Image(systemName: p.isBuiltin ? "laptopcomputer" : "display")
-                    .font(.system(size: 12))
-                    .foregroundStyle(p.isMain ? Color.accentColor : Color.primary.opacity(0.85))
+                    .font(.system(size: 11))
+                    .foregroundStyle(p.isMain ? Color.accentColor : Color.primary.opacity(0.8))
 
                 Text(p.isBuiltin ? "内建" : (p.name.components(separatedBy: " ").first ?? "外接"))
-                    .font(.system(size: 10, weight: p.isMain ? .bold : .medium))
+                    .font(.system(size: 9, weight: p.isMain ? .semibold : .medium))
                     .foregroundStyle(p.isMain ? Color.accentColor : Color.primary)
                     .lineLimit(1)
             }
-            .padding(4)
+            .padding(3)
         }
-        .scaleEffect(isDragged ? 1.05 : 1.0)
-        .animation(.easeInOut(duration: 0.15), value: isDragged)
+        .scaleEffect(isDragged ? 1.03 : 1.0)
+        .animation(.easeInOut(duration: 0.12), value: isDragged)
     }
 
     private struct LayoutResult {
@@ -721,7 +816,7 @@ struct ArrangementMiniCanvas: View {
         let totalW = max(1, maxX - minX)
         let totalH = max(1, maxY - minY)
 
-        let margin: CGFloat = 12
+        let margin: CGFloat = 10
         let availW = canvasSize.width - margin * 2
         let availH = canvasSize.height - margin * 2
 
@@ -737,67 +832,10 @@ struct ArrangementMiniCanvas: View {
         for p in placements {
             let x = offsetX + (p.bounds.minX - minX) * scale
             let y = offsetY + (p.bounds.minY - minY) * scale
-            let w = max(56, p.bounds.width * scale)
-            let h = max(38, p.bounds.height * scale)
+            let w = max(52, p.bounds.width * scale)
+            let h = max(34, p.bounds.height * scale)
             result[p.id] = CGRect(x: x, y: y, width: w, height: h)
         }
         return LayoutResult(rects: result, scale: scale)
-    }
-}
-
-// MARK: - CapsuleSlider
-
-struct CapsuleSlider: View {
-    @Binding var value: Double
-    let range: ClosedRange<Double>
-    let leftIcon: String
-    let rightIcon: String
-    var onChanged: (Double) -> Void
-
-    var body: some View {
-        GeometryReader { geo in
-            let totalWidth = geo.size.width
-            let percent = CGFloat((value - range.lowerBound) / (range.upperBound - range.lowerBound))
-            let fillWidth = max(0, min(totalWidth, totalWidth * percent))
-
-            ZStack(alignment: .leading) {
-                // Background track
-                RoundedRectangle(cornerRadius: 13, style: .continuous)
-                    .fill(Color.primary.opacity(0.08))
-
-                // Filled portion
-                RoundedRectangle(cornerRadius: 13, style: .continuous)
-                    .fill(Color.white.opacity(0.85))
-                    .frame(width: fillWidth)
-                    .shadow(color: Color.black.opacity(0.08), radius: 2, x: 0, y: 1)
-
-                // Icons overlay
-                HStack {
-                    Image(systemName: leftIcon)
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(percent > 0.12 ? Color.black.opacity(0.8) : Color.primary.opacity(0.6))
-                        .padding(.leading, 10)
-
-                    Spacer()
-
-                    Image(systemName: rightIcon)
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(percent > 0.88 ? Color.black.opacity(0.8) : Color.primary.opacity(0.6))
-                        .padding(.trailing, 10)
-                }
-            }
-            .frame(height: 26)
-            .contentShape(Rectangle())
-            .gesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { gesture in
-                        let newPercent = max(0, min(1, gesture.location.x / totalWidth))
-                        let newValue = range.lowerBound + Double(newPercent) * (range.upperBound - range.lowerBound)
-                        value = newValue
-                        onChanged(newValue)
-                    }
-            )
-        }
-        .frame(height: 26)
     }
 }
