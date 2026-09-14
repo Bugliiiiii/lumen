@@ -51,6 +51,16 @@ struct SettingDivider: View {
     }
 }
 
+struct ControlCenterContentSizeKey: PreferenceKey {
+    static let defaultValue: CGSize = .zero
+    static func reduce(value: inout CGSize, nextValue: () -> CGSize) {
+        let n = nextValue()
+        if n != .zero {
+            value = n
+        }
+    }
+}
+
 // MARK: - Control Center Panel View
 
 struct ControlCenterPanelView: View {
@@ -62,6 +72,7 @@ struct ControlCenterPanelView: View {
 
     var onOpenSettings: () -> Void
     var onQuit: () -> Void
+    var onSizeChange: ((CGSize) -> Void)? = nil
 
     var body: some View {
         VStack(spacing: 8) {
@@ -85,7 +96,16 @@ struct ControlCenterPanelView: View {
             footerSection
         }
         .padding(10)
-        .frame(width: 320)
+        .frame(width: 320, alignment: .top)
+        .background(
+            GeometryReader { geo in
+                Color.clear.preference(key: ControlCenterContentSizeKey.self, value: geo.size)
+            }
+        )
+        .onPreferenceChange(ControlCenterContentSizeKey.self) { newSize in
+            guard newSize.height > 50 else { return }
+            onSizeChange?(newSize)
+        }
         .background(Color.clear)
     }
 
