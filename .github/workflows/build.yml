@@ -3,6 +3,7 @@ name: build
 on:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
 
 permissions:
@@ -16,13 +17,15 @@ jobs:
       - name: Test macOS client
         working-directory: apps/macos
         run: swift run MonitorSwitchMac --self-test
-      - name: Build macOS app
+      - name: Build macOS app and DMG
         working-directory: apps/macos
         run: ./scripts/build-app.sh
       - uses: actions/upload-artifact@v7
         with:
-          name: monitor-switch-macos
-          path: apps/macos/artifacts/Monitor Switch.app
+          name: lumen-macos
+          path: |
+            apps/macos/artifacts/Lumen.app
+            apps/macos/artifacts/Lumen-macOS-arm64.dmg
 
   windows:
     runs-on: windows-latest
@@ -32,7 +35,51 @@ jobs:
         run: dotnet run --project apps/windows/tests/MonitorSwitch.Windows.Tests/MonitorSwitch.Windows.Tests.csproj
       - name: Publish Windows client
         run: dotnet publish apps/windows/src/MonitorSwitch.Windows/MonitorSwitch.Windows.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o artifacts/windows
+      - name: Rename executable
+        run: mv artifacts/windows/MonitorSwitch.Windows.exe artifacts/windows/Lumen-Windows-x64.exe
       - uses: actions/upload-artifact@v7
         with:
-          name: monitor-switch-windows
-          path: artifacts/windows/MonitorSwitch.Windows.exe
+          name: lumen-windows
+          path: artifacts/windows/Lumen-Windows-x64.exe
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [macos, windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v7
+        with:
+          name: lumen-macos
+          path: dist/macos
+
+      - uses: actions/download-artifact@v7
+        with:
+          name: lumen-windows
+          path: dist/windows
+
+      - name: Package macOS zip
+        run: |
+          cd dist/macos
+          zip -r -X -y ../../Lumen-macOS-arm64.zip Lumen.app
+
+      - name: Collect release assets
+        run: |
+          cp dist/macos/Lumen-macOS-arm64.dmg ./Lumen-macOS-arm64.dmg
+          cp dist/windows/Lumen-Windows-x64.exe ./Lumen-Windows-x64.exe
+          shasum -a 256 Lumen-macOS-arm64.dmg Lumen-macOS-arm64.zip Lumen-Windows-x64.exe > SHA256SUMS.txt
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            Lumen-macOS-arm64.dmg \
+            Lumen-macOS-arm64.zip \
+            Lumen-Windows-x64.exe \
+            SHA256SUMS.txt \
+            --title "${{ github.ref_name }} Lumen" \
+            --generate-notes
