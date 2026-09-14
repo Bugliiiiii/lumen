@@ -34,8 +34,35 @@ func CGSGetDisplayModeDescriptionOfLength(_ display: CGDirectDisplayID, _ index:
 @_silgen_name("CGSConfigureDisplayMode")
 func CGSConfigureDisplayMode(_ config: CGDisplayConfigRef, _ display: CGDirectDisplayID, _ modeNumber: Int32) -> CGError
 
-@_silgen_name("SLSConfigureDisplayEnabled")
-func SLSConfigureDisplayEnabled(_ config: CGDisplayConfigRef, _ display: CGDirectDisplayID, _ enabled: Bool) -> CGError
+private typealias SLSConfigureDisplayEnabledFunc = @convention(c) (CGDisplayConfigRef, CGDirectDisplayID, Bool) -> CGError
+private typealias SLSGetDisplayListFunc = @convention(c) (UInt32, UnsafeMutablePointer<CGDirectDisplayID>?, UnsafeMutablePointer<UInt32>) -> CGError
+
+@MainActor
+private enum SkyLight {
+    private static let handle: UnsafeMutableRawPointer? = {
+        dlopen("/System/Library/PrivateFrameworks/SkyLight.framework/SkyLight", RTLD_LAZY)
+    }()
+
+    private static let _configureDisplayEnabled: SLSConfigureDisplayEnabledFunc? = {
+        guard let handle = handle, let sym = dlsym(handle, "SLSConfigureDisplayEnabled") else { return nil }
+        return unsafeBitCast(sym, to: SLSConfigureDisplayEnabledFunc.self)
+    }()
+
+    private static let _getDisplayList: SLSGetDisplayListFunc? = {
+        guard let handle = handle, let sym = dlsym(handle, "SLSGetDisplayList") else { return nil }
+        return unsafeBitCast(sym, to: SLSGetDisplayListFunc.self)
+    }()
+
+    static func configureDisplayEnabled(_ config: CGDisplayConfigRef, _ display: CGDirectDisplayID, _ enabled: Bool) -> CGError {
+        guard let fn = _configureDisplayEnabled else { return .cannotComplete }
+        return fn(config, display, enabled)
+    }
+
+    static func getDisplayList(_ count: UInt32, _ displays: UnsafeMutablePointer<CGDirectDisplayID>?, _ outCount: UnsafeMutablePointer<UInt32>) -> CGError {
+        guard let fn = _getDisplayList else { return .cannotComplete }
+        return fn(count, displays, outCount)
+    }
+}
 
 // MARK: - Models
 
@@ -72,6 +99,9 @@ struct ManagedDisplay: Identifiable, Equatable {
     let name: String
     let isBuiltin: Bool
     let isMain: Bool
+    var isMirrored: Bool = false
+    var mirrorMasterID: CGDirectDisplayID? = nil
+    var isDisconnected: Bool = false
     let vendorID: UInt32
     let productID: UInt32
     var currentMode: DisplayModeItem?
@@ -100,6 +130,15 @@ final class ResolutionController: ObservableObject {
     static let shared = ResolutionController()
 
     @Published var displays: [ManagedDisplay] = []
+    @Published var disconnectedDisplays: [CGDirectDisplayID: ManagedDisplay] = [:]
+
+    var activeDisplayCount: Int {
+        displays.filter { !$0.isDisconnected }.count
+    }
+
+    var hasDisconnectedDisplays: Bool {
+        !disconnectedDisplays.isEmpty
+    }
 
     private static let standardAspectPairs: Set<String> = [
         // 16:9
@@ -122,12 +161,26 @@ final class ResolutionController: ObservableObject {
         var displayIDs = [CGDirectDisplayID](repeating: 0, count: Int(count))
         guard CGGetOnlineDisplayList(count, &displayIDs, &count) == .success else { return }
 
+        // Clean up disconnectedDisplays if physically unplugged (not present in SLSGetDisplayList)
+        var slsCount: UInt32 = 0
+        if SkyLight.getDisplayList(0, nil, &slsCount) == .success, slsCount > 0 {
+            var slsList = [CGDirectDisplayID](repeating: 0, count: Int(slsCount))
+            if SkyLight.getDisplayList(slsCount, &slsList, &slsCount) == .success {
+                let slsSet = Set(slsList)
+                disconnectedDisplays = disconnectedDisplays.filter { slsSet.contains($0.key) }
+            }
+        }
+
         var list: [ManagedDisplay] = []
 
         for did in displayIDs.prefix(Int(count)) {
+            disconnectedDisplays.removeValue(forKey: did)
+
             let isBuiltin = CGDisplayIsBuiltin(did) != 0
             let vendor = CGDisplayVendorNumber(did)
             let product = CGDisplayModelNumber(did)
+            let isMirrored = CGDisplayMirrorsDisplay(did) != 0 || CGDisplayIsInMirrorSet(did) != 0
+            let mirrorMaster = CGDisplayMirrorsDisplay(did) != 0 ? CGDisplayMirrorsDisplay(did) : nil
 
             var name = isBuiltin ? "内建显示器" : "外接显示器"
             if !isBuiltin {
@@ -243,6 +296,9 @@ final class ResolutionController: ObservableObject {
                 name: name,
                 isBuiltin: isBuiltin,
                 isMain: isMain,
+                isMirrored: isMirrored,
+                mirrorMasterID: mirrorMaster,
+                isDisconnected: false,
                 vendorID: vendor,
                 productID: product,
                 currentMode: current,
@@ -254,12 +310,73 @@ final class ResolutionController: ObservableObject {
             ))
         }
 
+        // Include disconnected displays
+        for (_, disDisplay) in disconnectedDisplays {
+            list.append(disDisplay)
+        }
+
         self.displays = list
     }
 
     func setMainDisplay(displayID: CGDirectDisplayID) {
         _ = ArrangementService.shared.setAsMainDisplay(targetID: displayID)
         refreshDisplays()
+    }
+
+    func disconnectDisplay(_ display: ManagedDisplay) {
+        let activeCount = displays.filter { !$0.isDisconnected }.count
+        guard activeCount > 1 else { return }
+
+        var config: CGDisplayConfigRef?
+        guard CGBeginDisplayConfiguration(&config) == .success, let cfg = config else { return }
+        let err = SkyLight.configureDisplayEnabled(cfg, display.displayID, false)
+        if err == .success {
+            CGCompleteDisplayConfiguration(cfg, .forSession)
+            var saved = display
+            saved.isDisconnected = true
+            disconnectedDisplays[display.displayID] = saved
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                self.refreshDisplays()
+                ArrangementService.shared.refresh()
+            }
+        } else {
+            CGCancelDisplayConfiguration(cfg)
+        }
+    }
+
+    func reconnectDisplay(_ displayID: CGDirectDisplayID) {
+        var config: CGDisplayConfigRef?
+        guard CGBeginDisplayConfiguration(&config) == .success, let cfg = config else { return }
+        let err = SkyLight.configureDisplayEnabled(cfg, displayID, true)
+        if err == .success {
+            CGCompleteDisplayConfiguration(cfg, .forSession)
+            disconnectedDisplays.removeValue(forKey: displayID)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                self.refreshDisplays()
+                ArrangementService.shared.refresh()
+            }
+        } else {
+            CGCancelDisplayConfiguration(cfg)
+        }
+    }
+
+    func setMirror(for displayID: CGDirectDisplayID, masterID: CGDirectDisplayID?) {
+        var config: CGDisplayConfigRef?
+        guard CGBeginDisplayConfiguration(&config) == .success, let cfg = config else { return }
+        if let master = masterID {
+            CGConfigureDisplayMirrorOfDisplay(cfg, displayID, master)
+        } else {
+            CGConfigureDisplayMirrorOfDisplay(cfg, displayID, kCGNullDirectDisplay)
+        }
+        let result = CGCompleteDisplayConfiguration(cfg, .forSession)
+        if result == .success {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                self.refreshDisplays()
+                ArrangementService.shared.refresh()
+            }
+        } else {
+            CGCancelDisplayConfiguration(cfg)
+        }
     }
 
     private func fetchModes(for displayID: CGDirectDisplayID) -> [DisplayModeItem] {

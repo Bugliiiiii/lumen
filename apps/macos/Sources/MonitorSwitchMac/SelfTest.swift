@@ -11,7 +11,7 @@ enum SelfTest {
             try checkSettingsRoundTrip()
             try renderSettingsView()
             try renderControlCenterView()
-            print("MonitorSwitchMac self-test: 14 assertions passed")
+            print("MonitorSwitchMac self-test: 17 assertions passed")
             return 0
         } catch {
             fputs("MonitorSwitchMac self-test failed: \(error)\n", stderr)
@@ -94,8 +94,69 @@ enum SelfTest {
         guard let png = representation.representation(using: .png, properties: [:]) else {
             throw SelfTestError.assertion("control center PNG")
         }
-        try require(png.count > 5_000, "control center PNG is empty")
         try png.write(to: URL(fileURLWithPath: "/private/tmp/monitor-switch-cc-preview.png"), options: .atomic)
+
+        // Test dual-display rendering
+        let originalDisplays = ResolutionController.shared.displays
+        defer { ResolutionController.shared.displays = originalDisplays }
+
+        let mockMode = DisplayModeItem(modeNumber: 1, width: 2560, height: 1440, refreshRate: 165, isHiDPI: false)
+        let mockExternal = ManagedDisplay(
+            displayID: 9999,
+            name: "H27T22S",
+            isBuiltin: false,
+            isMain: false,
+            isMirrored: false,
+            mirrorMasterID: nil,
+            isDisconnected: false,
+            vendorID: 0x4d67,
+            productID: 0x2725,
+            currentMode: mockMode,
+            recommendedModes: [RecommendedMode(mode: mockMode, badge: "最佳推荐", systemImage: "sparkles", subtitle: "2K 165Hz 原生")],
+            standardModes: [],
+            fineTuningModes: [],
+            availableResolutions: [mockMode],
+            availableRefreshRates: [60, 120, 144, 165]
+        )
+
+        var dualList = originalDisplays
+        dualList.append(mockExternal)
+        ResolutionController.shared.displays = dualList
+
+        let dualView = ControlCenterPanelView(appModel: model, onOpenSettings: {}, onQuit: {})
+        let dualHost = NSHostingView(rootView: dualView)
+        let dualSize = dualHost.fittingSize
+        try require(dualSize.width <= 360, "dual control center width is \(dualSize.width)")
+        dualHost.frame = NSRect(origin: .zero, size: dualSize)
+        dualHost.layoutSubtreeIfNeeded()
+        if let rep = dualHost.bitmapImageRepForCachingDisplay(in: dualHost.bounds) {
+            dualHost.cacheDisplay(in: dualHost.bounds, to: rep)
+            if let dpng = rep.representation(using: .png, properties: [:]) {
+                try require(dpng.count > 5_000, "dual PNG is empty")
+                try dpng.write(to: URL(fileURLWithPath: "/private/tmp/monitor-switch-cc-dual-preview.png"), options: .atomic)
+            }
+        }
+
+        // Test disconnected display rendering
+        var mockDisconnected = mockExternal
+        mockDisconnected.isDisconnected = true
+        var discList = originalDisplays
+        discList.append(mockDisconnected)
+        ResolutionController.shared.displays = discList
+
+        let discView = ControlCenterPanelView(appModel: model, onOpenSettings: {}, onQuit: {})
+        let discHost = NSHostingView(rootView: discView)
+        let discSize = discHost.fittingSize
+        try require(discSize.width <= 360, "disconnected control center width is \(discSize.width)")
+        discHost.frame = NSRect(origin: .zero, size: discSize)
+        discHost.layoutSubtreeIfNeeded()
+        if let rep = discHost.bitmapImageRepForCachingDisplay(in: discHost.bounds) {
+            discHost.cacheDisplay(in: discHost.bounds, to: rep)
+            if let dispng = rep.representation(using: .png, properties: [:]) {
+                try require(dispng.count > 5_000, "disconnected PNG is empty")
+                try dispng.write(to: URL(fileURLWithPath: "/private/tmp/monitor-switch-cc-disconnected-preview.png"), options: .atomic)
+            }
+        }
     }
 }
 

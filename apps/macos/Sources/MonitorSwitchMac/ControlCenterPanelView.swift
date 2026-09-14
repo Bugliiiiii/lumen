@@ -74,7 +74,7 @@ struct ControlCenterPanelView: View {
             }
 
             // 3. Screen Arrangement (Displays Layout Canvas)
-            if arrangementService.placements.count >= 2 {
+            if arrangementService.placements.count >= 2 && !resController.displays.contains(where: { $0.isMirrored }) {
                 screenArrangementSection
             }
 
@@ -196,6 +196,54 @@ struct ControlCenterPanelView: View {
 
     @ViewBuilder
     private func displaySection(for display: ManagedDisplay) -> some View {
+        if display.isDisconnected {
+            disconnectedDisplaySection(for: display)
+        } else {
+            connectedDisplaySection(for: display)
+        }
+    }
+
+    @ViewBuilder
+    private func disconnectedDisplaySection(for display: ManagedDisplay) -> some View {
+        LiquidGlassPanel(padding: 9) {
+            HStack(alignment: .center, spacing: 7) {
+                Image(systemName: "display")
+                    .font(.system(size: 14, weight: .regular))
+                    .foregroundStyle(Color.secondary.opacity(0.8))
+                    .frame(width: 16)
+
+                VStack(alignment: .leading, spacing: 1.5) {
+                    Text(display.name)
+                        .font(.system(size: 12.5, weight: .semibold))
+                        .foregroundStyle(Color.secondary)
+
+                    HStack(spacing: 4) {
+                        Circle()
+                            .fill(Color.secondary.opacity(0.45))
+                            .frame(width: 5, height: 5)
+                        Text("已断开 (待机)")
+                            .font(.system(size: 10))
+                            .foregroundStyle(Color.secondary)
+                    }
+                }
+
+                Spacer(minLength: 8)
+
+                Button {
+                    resController.reconnectDisplay(display.displayID)
+                } label: {
+                    Text("重新连接")
+                        .font(.system(size: 11, weight: .medium))
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+                .fixedSize()
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func connectedDisplaySection(for display: ManagedDisplay) -> some View {
         LiquidGlassPanel(padding: 9) {
             VStack(alignment: .leading, spacing: 7) {
                 // Header: Icon + Name + Spec
@@ -212,10 +260,18 @@ struct ControlCenterPanelView: View {
 
                         if let cur = display.currentMode {
                             let hidpiSuffix = cur.isHiDPI ? " · HiDPI" : ""
-                            Text("\(cur.width) × \(cur.height) · \(cur.refreshRate) Hz\(hidpiSuffix)")
+                            let mirrorSuffix = display.isMirrored ? " (镜像)" : ""
+                            Text("\(cur.width) × \(cur.height) · \(cur.refreshRate) Hz\(hidpiSuffix)\(mirrorSuffix)")
                                 .font(.system(size: 10))
                                 .foregroundStyle(Color.secondary)
                                 .contextMenu {
+                                    if !display.isBuiltin && resController.activeDisplayCount > 1 {
+                                        Button(role: .destructive) {
+                                            resController.disconnectDisplay(display)
+                                        } label: {
+                                            Label("断开此显示器连接", systemImage: "power")
+                                        }
+                                    }
                                     if !display.isBuiltin && hidpiService.isHiDPIInstalled(vendor: display.vendorID, product: display.productID) {
                                         Button(role: .destructive) {
                                             Task {
@@ -290,6 +346,12 @@ struct ControlCenterPanelView: View {
                 VStack(spacing: 0) {
                     mainDisplayRow(for: display)
 
+                    if resController.displays.count >= 2 || resController.hasDisconnectedDisplays {
+                        SettingDivider()
+
+                        displayModeRow(for: display)
+                    }
+
                     SettingDivider()
 
                     resolutionPickerRow(for: display)
@@ -312,13 +374,82 @@ struct ControlCenterPanelView: View {
     }
 
     @ViewBuilder
+    private func displayModeRow(for display: ManagedDisplay) -> some View {
+        let otherDisplays = resController.displays.filter { $0.displayID != display.displayID && !$0.isDisconnected }
+        let modeLabel: String = {
+            if display.isMirrored {
+                if let masterID = display.mirrorMasterID,
+                   let master = resController.displays.first(where: { $0.displayID == masterID }) {
+                    return "镜像 \(master.name)"
+                }
+                return "镜像显示"
+            }
+            return "扩展屏幕"
+        }()
+
+        HStack {
+            Label("显示模式", systemImage: "rectangle.2.swap")
+                .font(.system(size: 11.5))
+                .foregroundStyle(Color.primary)
+            Spacer()
+            Menu {
+                Button {
+                    resController.setMirror(for: display.displayID, masterID: nil)
+                } label: {
+                    HStack {
+                        Text("扩展屏幕")
+                        if !display.isMirrored {
+                            Image(systemName: "checkmark")
+                        }
+                    }
+                }
+
+                ForEach(otherDisplays) { other in
+                    Button {
+                        resController.setMirror(for: display.displayID, masterID: other.displayID)
+                    } label: {
+                        HStack {
+                            Text("镜像 \(other.name)")
+                            if display.isMirrored && (display.mirrorMasterID == other.displayID || otherDisplays.count == 1) {
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+                }
+
+                if !display.isBuiltin && resController.activeDisplayCount > 1 {
+                    Divider()
+
+                    Button(role: .destructive) {
+                        resController.disconnectDisplay(display)
+                    } label: {
+                        Label("断开此显示器", systemImage: "power")
+                    }
+                }
+            } label: {
+                Text(modeLabel)
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(Color.secondary)
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+        }
+        .padding(.horizontal, 4)
+        .padding(.vertical, 4)
+    }
+
+    @ViewBuilder
     private func mainDisplayRow(for display: ManagedDisplay) -> some View {
         HStack {
             Label("主显示器", systemImage: "m.circle")
                 .font(.system(size: 11.5))
                 .foregroundStyle(Color.primary)
             Spacer()
-            if display.isMain {
+            if display.isMirrored {
+                Text("镜像同步中")
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(Color.secondary)
+            } else if display.isMain {
                 HStack(spacing: 3) {
                     Image(systemName: "checkmark")
                         .font(.system(size: 9.5, weight: .bold))
