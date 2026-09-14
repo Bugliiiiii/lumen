@@ -5,7 +5,7 @@ namespace MonitorSwitch.Windows;
 
 public static partial class CapabilitiesParser
 {
-    [GeneratedRegex(@"(?:^|\s)60\s*\(([^)]*)\)", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"(?<![0-9a-z])60\s*\(([^)]*)\)", RegexOptions.IgnoreCase)]
     private static partial Regex InputSourceRegex();
 
     [GeneratedRegex(@"(?<![0-9a-z])(?:0x)?([0-9a-f]{1,2})(?![0-9a-z])", RegexOptions.IgnoreCase)]
