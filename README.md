@@ -30,11 +30,11 @@ Lumen 是一款轻量原生的显示器控制中心，为 macOS (Apple Silicon) 
 
 ### macOS (Apple Silicon)
 
-从 [Releases](https://github.com/Bugliiiiii/switch-monitor/releases) 下载 `Lumen-macOS-arm64.zip`，解压后拖入 `/Applications` 即可使用。
+从 [Releases](https://github.com/Bugliiiiii/lumen/releases) 下载 `Lumen-macOS-arm64.zip`，解压后拖入 `/Applications` 即可使用。
 
 ### Windows (x64)
 
-从 [Releases](https://github.com/Bugliiiiii/switch-monitor/releases) 下载 `Lumen-Windows-x64.exe`，运行后常驻系统通知区域，无需管理员权限。
+从 [Releases](https://github.com/Bugliiiiii/lumen/releases) 下载 `Lumen-Windows-x64.exe`，运行后常驻系统通知区域，无需管理员权限。
 
 ## 默认快捷键
 
