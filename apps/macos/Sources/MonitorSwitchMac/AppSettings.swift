@@ -46,11 +46,13 @@ struct AppSettings: Codable, Equatable {
     var macLabel = "Mac"
     var shortcutModifiers: ShortcutModifiers = [.option, .command]
     var shortcutKey = "S"
+    var automaticallyChecksForUpdates = true
 
     var shortcutText: String { "\(shortcutModifiers.displayText)\(shortcutKey)" }
 
     enum CodingKeys: String, CodingKey {
         case monitorHint, windowsInput, macInput, windowsLabel, macLabel, shortcutModifiers, shortcutKey
+        case automaticallyChecksForUpdates
     }
 
     init() {}
@@ -64,6 +66,7 @@ struct AppSettings: Codable, Equatable {
         macLabel = try container.decodeIfPresent(String.self, forKey: .macLabel) ?? "Mac"
         shortcutModifiers = try container.decodeIfPresent(ShortcutModifiers.self, forKey: .shortcutModifiers) ?? [.option, .command]
         shortcutKey = try container.decodeIfPresent(String.self, forKey: .shortcutKey) ?? "S"
+        automaticallyChecksForUpdates = try container.decodeIfPresent(Bool.self, forKey: .automaticallyChecksForUpdates) ?? true
     }
 }
 

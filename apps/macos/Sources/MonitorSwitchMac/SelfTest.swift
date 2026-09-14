@@ -9,9 +9,11 @@ enum SelfTest {
             try checkDefaults()
             try checkConnectorNames()
             try checkSettingsRoundTrip()
+            try checkInputStatusSynchronizer()
             try renderSettingsView()
+            try renderUpdateBanner()
             try renderControlCenterView()
-            print("MonitorSwitchMac self-test: 17 assertions passed")
+            print("MonitorSwitchMac self-test: 27 assertions passed")
             return 0
         } catch {
             fputs("MonitorSwitchMac self-test failed: \(error)\n", stderr)
@@ -28,6 +30,11 @@ enum SelfTest {
         try require(settings.windowsInput == 0x0F, "Windows input must be DP1")
         try require(settings.macInput == 0x11, "Mac input must be HDMI1")
         try require(settings.shortcutText == "⌥⌘S", "default shortcut must be Option-Command-S")
+        try require(settings.automaticallyChecksForUpdates, "automatic update checks enabled by default")
+        try require(UpdateService.isVersionNewer("v0.4.0", than: "0.3.0"), "newer release version")
+        try require(!UpdateService.isVersionNewer("v0.3.0", than: "0.3.0"), "same release version")
+        try require(UpdateService.isVersionNewer("v1.0", than: "0.9.9"), "major release version")
+        try require(!UpdateService.isVersionNewer("invalid", than: "0.3.0"), "invalid release version")
     }
 
     private static func checkConnectorNames() throws {
@@ -48,8 +55,22 @@ enum SelfTest {
         var expected = AppSettings()
         expected.windowsLabel = "工作电脑"
         expected.shortcutKey = "K"
+        expected.automaticallyChecksForUpdates = false
         try SettingsStore.save(expected, defaults: defaults)
         try require(SettingsStore.load(defaults: defaults) == expected, "settings round trip")
+    }
+
+    @MainActor
+    private static func checkInputStatusSynchronizer() throws {
+        var refreshCount = 0
+        let synchronizer = InputStatusSynchronizer(interval: .seconds(60)) {
+            refreshCount += 1
+        }
+        synchronizer.start()
+        try require(refreshCount == 1, "input status sync must refresh immediately when panel opens")
+        try require(synchronizer.isRunning, "input status sync must run while panel is visible")
+        synchronizer.stop()
+        try require(!synchronizer.isRunning, "input status sync must stop when panel closes")
     }
 
     @MainActor
@@ -71,6 +92,33 @@ enum SelfTest {
         }
         try require(png.count > 10_000, "settings PNG is empty")
         try png.write(to: URL(fileURLWithPath: "/private/tmp/monitor-switch-settings-preview.png"), options: .atomic)
+    }
+
+    @MainActor
+    private static func renderUpdateBanner() throws {
+        let release = UpdateRelease(
+            version: VersionNumber("0.4.0")!,
+            tagName: "v0.4.0",
+            downloadURL: URL(string: "https://github.com/Bugliiiiii/lumen/releases/download/v0.4.0/Lumen-macOS-arm64.dmg")!,
+            downloadSize: 2_000_000,
+            checksumURL: URL(string: "https://github.com/Bugliiiiii/lumen/releases/download/v0.4.0/SHA256SUMS.txt")!,
+            releasePageURL: URL(string: "https://github.com/Bugliiiiii/lumen/releases/tag/v0.4.0")!
+        )
+        let service = UpdateService(initialRelease: release)
+        let hostingView = NSHostingView(rootView: UpdateBannerView(service: service))
+        let size = hostingView.fittingSize
+        try require(size.width <= 420, "update banner width is \(size.width)")
+        hostingView.frame = NSRect(origin: .zero, size: size)
+        hostingView.layoutSubtreeIfNeeded()
+        guard let representation = hostingView.bitmapImageRepForCachingDisplay(in: hostingView.bounds) else {
+            throw SelfTestError.assertion("update banner PNG")
+        }
+        hostingView.cacheDisplay(in: hostingView.bounds, to: representation)
+        guard let renderedPNG = representation.representation(using: .png, properties: [:]) else {
+            throw SelfTestError.assertion("rendered update banner PNG")
+        }
+        try require(renderedPNG.count > 1_000, "update banner PNG is empty")
+        try renderedPNG.write(to: URL(fileURLWithPath: "/private/tmp/monitor-switch-update-preview.png"), options: .atomic)
     }
 
     @MainActor

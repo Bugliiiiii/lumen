@@ -6,6 +6,16 @@ internal static class NativeMethods
 {
     internal const int WmHotkey = 0x0312;
     internal const uint ModNoRepeat = 0x4000;
+    internal const int DwmWindowCornerPreference = 33;
+    internal const int DwmSystemBackdropType = 38;
+
+    internal enum DwmWindowCorner
+    {
+        Default = 0,
+        DoNotRound = 1,
+        Round = 2,
+        RoundSmall = 3,
+    }
 
     internal delegate bool MonitorEnumProc(IntPtr monitor, IntPtr hdc, IntPtr rect, IntPtr data);
 
@@ -78,4 +88,18 @@ internal static class NativeMethods
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static extern bool UnregisterHotKey(IntPtr window, int id);
+
+    [DllImport("dwmapi.dll")]
+    internal static extern int DwmSetWindowAttribute(
+        IntPtr window,
+        int attribute,
+        ref DwmWindowCorner value,
+        int valueSize);
+
+    [DllImport("dwmapi.dll")]
+    internal static extern int DwmSetWindowAttribute(
+        IntPtr window,
+        int attribute,
+        ref int value,
+        int valueSize);
 }

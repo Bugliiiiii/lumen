@@ -12,9 +12,12 @@ final class AppModel: ObservableObject {
     @Published private(set) var statusText = "仅读取显示器，不会自动切换"
     @Published private(set) var isBusy = false
     @Published var launchAtLogin: Bool
+    let updateService = UpdateService()
 
     private let ddc = DDCService()
     private let hotKey = HotKeyController()
+    private var inputStateRevision = 0
+    private var isRefreshingInputStatus = false
     @Published private(set) var lastTargetInput: UInt8?
     var settingsDidChange: (() -> Void)?
 
@@ -34,10 +37,14 @@ final class AppModel: ObservableObject {
     func start() {
         registerHotKey(showError: false)
         scan(showError: false)
+        if settings.automaticallyChecksForUpdates {
+            updateService.checkForUpdates()
+        }
     }
 
     func scan(showError: Bool = true) {
         guard !isBusy else { return }
+        inputStateRevision += 1
         isBusy = true
         statusText = "正在读取 DDC/CI…"
         do {
@@ -57,8 +64,29 @@ final class AppModel: ObservableObject {
         settingsDidChange?()
     }
 
+    func refreshInputStatus() {
+        guard !isBusy, !isRefreshingInputStatus else { return }
+        isRefreshingInputStatus = true
+        let revision = inputStateRevision
+        let monitorHint = settings.monitorHint
+
+        Task { [weak self] in
+            let result = await Task.detached(priority: .utility) {
+                try? DDCService().scan(monitorHint: monitorHint)
+            }.value
+            guard let self else { return }
+            self.isRefreshingInputStatus = false
+            guard self.inputStateRevision == revision, !self.isBusy, let result else { return }
+            guard self.snapshot != result || self.lastTargetInput != result.currentInput else { return }
+            self.snapshot = result
+            self.lastTargetInput = result.currentInput
+            self.settingsDidChange?()
+        }
+    }
+
     func switchToWindows() {
         guard !isBusy else { return }
+        inputStateRevision += 1
         isBusy = true
         defer { isBusy = false }
         statusText = "正在发送切换命令…"
@@ -83,6 +111,7 @@ final class AppModel: ObservableObject {
 
     func switchToMac() {
         guard !isBusy else { return }
+        inputStateRevision += 1
         isBusy = true
         defer { isBusy = false }
         statusText = "正在发送切换命令…"
@@ -123,6 +152,9 @@ final class AppModel: ObservableObject {
             try SettingsStore.save(settings)
             try updateLaunchAtLogin()
             statusText = "设置已保存"
+            if settings.automaticallyChecksForUpdates && updateService.availableRelease == nil {
+                updateService.checkForUpdates()
+            }
             settingsDidChange?()
         } catch {
             statusText = error.localizedDescription

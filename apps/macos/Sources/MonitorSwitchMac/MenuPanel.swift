@@ -45,6 +45,7 @@ final class AutoSizingHostingView<Content: View>: NSHostingView<Content> {
 final class MenuPanelController {
     private var panel: MenuPanel?
     private var outsideClickMonitor: Any?
+    private var inputStatusSynchronizer: InputStatusSynchronizer?
     private(set) var isShown = false
     private weak var currentStatusButton: NSStatusBarButton?
 
@@ -130,6 +131,13 @@ final class MenuPanelController {
         p.makeKey()
         isShown = true
 
+        inputStatusSynchronizer?.stop()
+        let synchronizer = InputStatusSynchronizer { [weak model] in
+            model?.refreshInputStatus()
+        }
+        inputStatusSynchronizer = synchronizer
+        synchronizer.start()
+
         // Install outside-click monitor
         outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
             Task { @MainActor in
@@ -180,6 +188,8 @@ final class MenuPanelController {
 
     func close() {
         guard isShown else { return }
+        inputStatusSynchronizer?.stop()
+        inputStatusSynchronizer = nil
         panel?.orderOut(nil)
         isShown = false
         if let monitor = outsideClickMonitor {

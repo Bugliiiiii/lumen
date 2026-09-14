@@ -20,6 +20,7 @@ public sealed class AppSettings
     public string MacLabel { get; set; } = "Mac";
     public HotkeyModifiers HotkeyModifiers { get; set; } = HotkeyModifiers.Control | HotkeyModifiers.Alt;
     public Keys HotkeyKey { get; set; } = Keys.S;
+    public bool AutomaticallyChecksForUpdates { get; set; } = true;
 
     public string HotkeyText => $"{FormatModifiers(HotkeyModifiers)}{HotkeyKey}";
 
@@ -32,6 +33,7 @@ public sealed class AppSettings
         MacLabel = MacLabel,
         HotkeyModifiers = HotkeyModifiers,
         HotkeyKey = HotkeyKey,
+        AutomaticallyChecksForUpdates = AutomaticallyChecksForUpdates,
     };
 
     public void Apply(AppSettings source)
@@ -43,6 +45,7 @@ public sealed class AppSettings
         MacLabel = source.MacLabel;
         HotkeyModifiers = source.HotkeyModifiers;
         HotkeyKey = source.HotkeyKey;
+        AutomaticallyChecksForUpdates = source.AutomaticallyChecksForUpdates;
     }
 
     private static string FormatModifiers(HotkeyModifiers modifiers)

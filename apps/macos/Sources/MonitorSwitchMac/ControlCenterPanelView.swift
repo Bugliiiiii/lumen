@@ -92,6 +92,8 @@ struct ControlCenterPanelView: View {
             // 4. Quick Toggles (Segmented Glass Control)
             systemQuickToggles
 
+            UpdateBannerView(service: appModel.updateService, compact: true)
+
             // 5. Minimal Footer
             footerSection
         }
@@ -782,6 +784,39 @@ struct ControlCenterPanelView: View {
         }
         .padding(.horizontal, 4)
         .padding(.top, 1)
+    }
+}
+
+struct UpdateBannerView: View {
+    @ObservedObject var service: UpdateService
+    var compact = false
+
+    @ViewBuilder
+    var body: some View {
+        if let release = service.availableRelease {
+            HStack(spacing: 7) {
+                Image(systemName: "arrow.down.circle.fill")
+                    .foregroundStyle(Color.accentColor)
+                Text("发现新版本 \(release.tagName)")
+                    .font(.system(size: compact ? 10.5 : 11.5, weight: .medium))
+                    .lineLimit(1)
+                Spacer()
+                Button(service.isDownloading ? "正在下载…" : "立即更新") {
+                    service.downloadAndOpen()
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.mini)
+                .disabled(service.isDownloading)
+            }
+            .padding(.horizontal, compact ? 9 : 11)
+            .padding(.vertical, compact ? 7 : 9)
+            .background(Color.accentColor.opacity(0.08))
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(Color.accentColor.opacity(0.18), lineWidth: 0.5)
+            }
+        }
     }
 }
 

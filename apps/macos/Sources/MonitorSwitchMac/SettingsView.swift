@@ -189,8 +189,26 @@ struct SettingsView: View {
                                 model.save()
                             }
                     }
+
+                    Divider()
+                        .padding(.leading, 14)
+
+                    CardRow {
+                        Text("自动检查更新")
+                            .font(.system(size: 12.5))
+                    } trailing: {
+                        Toggle("", isOn: $model.settings.automaticallyChecksForUpdates)
+                            .labelsHidden()
+                            .toggleStyle(.switch)
+                            .controlSize(.small)
+                            .onChange(of: model.settings.automaticallyChecksForUpdates) {
+                                model.save()
+                            }
+                    }
                 }
             }
+
+            UpdateSettingsSection(service: model.updateService)
 
             // Footer - Transient status & auto-saved note
             HStack(alignment: .center) {
@@ -212,6 +230,40 @@ struct SettingsView: View {
         .padding(18)
         .frame(width: 420)
         .background(Color(nsColor: .windowBackgroundColor))
+    }
+}
+
+private struct UpdateSettingsSection: View {
+    @ObservedObject var service: UpdateService
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            SectionHeader(title: "软件更新")
+
+            if service.availableRelease != nil {
+                UpdateBannerView(service: service)
+            } else {
+                SettingsCard {
+                    CardRow {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Lumen \(service.currentVersion)")
+                                .font(.system(size: 12.5, weight: .medium))
+                            Text(service.statusText.isEmpty ? "从 GitHub Releases 获取版本信息" : service.statusText)
+                                .font(.system(size: 10.5))
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+                    } trailing: {
+                        Button(service.isChecking ? "正在检查…" : "检查更新") {
+                            service.checkForUpdates()
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        .disabled(service.isChecking)
+                    }
+                }
+            }
+        }
     }
 }
 

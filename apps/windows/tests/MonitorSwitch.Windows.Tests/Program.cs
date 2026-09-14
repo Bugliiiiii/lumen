@@ -33,5 +33,14 @@ var settings = new AppSettings();
 AssertEqual((byte)0x0F, settings.WindowsInput, "default Windows input");
 AssertEqual((byte)0x11, settings.MacInput, "default Mac input");
 AssertEqual("Ctrl + Alt + S", settings.HotkeyText, "default hotkey");
+AssertEqual(true, settings.AutomaticallyChecksForUpdates, "automatic update checks enabled by default");
+settings.AutomaticallyChecksForUpdates = false;
+AssertEqual(false, settings.Copy().AutomaticallyChecksForUpdates, "update preference copied");
+var appliedSettings = new AppSettings();
+appliedSettings.Apply(settings);
+AssertEqual(false, appliedSettings.AutomaticallyChecksForUpdates, "update preference applied");
+AssertEqual(true, UpdateManager.IsVersionNewer("v0.4.0", "0.3.0"), "newer release version");
+AssertEqual(false, UpdateManager.IsVersionNewer("v0.3.0", "0.3.0"), "same release version");
+AssertEqual(false, UpdateManager.IsVersionNewer("not-a-version", "0.3.0"), "invalid release version");
 
-Console.WriteLine("MonitorSwitch.Windows.Tests: 9 assertions passed");
+Console.WriteLine("MonitorSwitch.Windows.Tests: 15 assertions passed");

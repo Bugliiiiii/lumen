@@ -1,7 +1,7 @@
 @preconcurrency import AppleSiliconDDC
 import Foundation
 
-struct MonitorSnapshot: Equatable {
+struct MonitorSnapshot: Equatable, Sendable {
     let name: String
     let serial: String
     let currentInput: UInt8
