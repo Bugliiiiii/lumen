@@ -13,7 +13,8 @@ struct QuietSegmentButtonStyle: ButtonStyle {
 }
 
 struct LiquidGlassPanel<Content: View>: View {
-    var padding: CGFloat = 10
+    @Environment(\.accessibilityReduceTransparency) var reduceTransparency
+    var padding: CGFloat = 9
     @ViewBuilder let content: Content
 
     var body: some View {
@@ -22,20 +23,19 @@ struct LiquidGlassPanel<Content: View>: View {
         }
         .padding(padding)
         .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.32))
+            RoundedRectangle(cornerRadius: 11, style: .continuous)
+                .fill(
+                    reduceTransparency
+                        ? Color(nsColor: .windowBackgroundColor)
+                        : Color(nsColor: .controlBackgroundColor).opacity(0.18)
+                )
         )
         .overlay {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: 11, style: .continuous)
                 .stroke(
-                    LinearGradient(
-                        colors: [
-                            Color.white.opacity(0.16),
-                            Color.white.opacity(0.05)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
+                    reduceTransparency
+                        ? Color(nsColor: .separatorColor).opacity(0.4)
+                        : Color.white.opacity(0.08),
                     lineWidth: 0.5
                 )
         }
@@ -206,21 +206,9 @@ struct ControlCenterPanelView: View {
                         .padding(.top, 1)
 
                     VStack(alignment: .leading, spacing: 1.5) {
-                        HStack(spacing: 5) {
-                            Text(display.name)
-                                .font(.system(size: 12.5, weight: .semibold))
-                                .foregroundStyle(Color.primary)
-
-                            if display.isAtTopRecommended {
-                                Text("推荐")
-                                    .font(.system(size: 8.5, weight: .medium))
-                                    .foregroundStyle(Color.secondary)
-                                    .padding(.horizontal, 4)
-                                    .padding(.vertical, 1)
-                                    .background(Color.primary.opacity(0.06))
-                                    .clipShape(Capsule())
-                            }
-                        }
+                        Text(display.name)
+                            .font(.system(size: 12.5, weight: .semibold))
+                            .foregroundStyle(Color.primary)
 
                         if let cur = display.currentMode {
                             let hidpiSuffix = cur.isHiDPI ? " · HiDPI" : ""
@@ -361,13 +349,14 @@ struct ControlCenterPanelView: View {
             Spacer()
             Menu {
                 if !display.recommendedModes.isEmpty {
-                    Section("⭐ 推荐最佳分辨率") {
+                    Section("推荐") {
                         ForEach(display.recommendedModes) { rec in
                             Button {
                                 resController.setMode(rec.mode, for: display.displayID)
                             } label: {
                                 HStack {
-                                    Text("\(rec.badge)  \(rec.mode.displayName) · \(rec.subtitle)")
+                                    Label(rec.badge, systemImage: rec.systemImage)
+                                    Text("\(rec.mode.displayName) · \(rec.subtitle)")
                                     if display.currentMode?.width == rec.mode.width && display.currentMode?.height == rec.mode.height && display.currentMode?.isHiDPI == rec.mode.isHiDPI {
                                         Image(systemName: "checkmark")
                                     }
@@ -378,7 +367,7 @@ struct ControlCenterPanelView: View {
                 }
 
                 if !display.standardModes.isEmpty {
-                    Section("常用标准分辨率") {
+                    Section("常用分辨率") {
                         ForEach(display.standardModes) { mode in
                             Button {
                                 resController.setMode(mode, for: display.displayID)
@@ -395,7 +384,7 @@ struct ControlCenterPanelView: View {
                 }
 
                 if !display.fineTuningModes.isEmpty {
-                    Menu("更多微调分辨率 (\(display.fineTuningModes.count)+)...") {
+                    Menu {
                         ForEach(display.fineTuningModes) { mode in
                             Button {
                                 resController.setMode(mode, for: display.displayID)
@@ -408,6 +397,8 @@ struct ControlCenterPanelView: View {
                                 }
                             }
                         }
+                    } label: {
+                        Label("更多分辨率 (\(display.fineTuningModes.count)+)…", systemImage: "slider.horizontal.3")
                     }
                 }
             } label: {
@@ -548,16 +539,16 @@ struct ControlCenterPanelView: View {
                     title: "深色模式",
                     icon: controlService.isDarkMode ? "moon.fill" : "moon",
                     isActive: controlService.isDarkMode,
-                    tint: Color.blue
+                    activeTint: Color.primary
                 ) {
                     controlService.toggleDarkMode()
                 }
 
                 modeSegment(
-                    title: "护眼模式",
-                    icon: controlService.isNightShift ? "sun.max.fill" : "sun.max",
+                    title: "夜览",
+                    icon: controlService.isNightShift ? "moon.stars.fill" : "moon.stars",
                     isActive: controlService.isNightShift,
-                    tint: Color.orange
+                    activeTint: Color.orange
                 ) {
                     controlService.toggleNightShift()
                 }
@@ -566,7 +557,7 @@ struct ControlCenterPanelView: View {
                     title: "原彩显示",
                     icon: controlService.isTrueTone ? "circle.lefthalf.filled" : "circle",
                     isActive: controlService.isTrueTone,
-                    tint: Color.teal
+                    activeTint: Color.teal
                 ) {
                     controlService.toggleTrueTone()
                 }
@@ -579,14 +570,14 @@ struct ControlCenterPanelView: View {
         title: String,
         icon: String,
         isActive: Bool,
-        tint: Color,
+        activeTint: Color,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
             HStack(spacing: 4) {
                 Image(systemName: icon)
                     .font(.system(size: 11.5, weight: isActive ? .medium : .regular))
-                    .foregroundStyle(isActive ? tint : Color.secondary)
+                    .foregroundStyle(isActive ? activeTint : Color.secondary)
 
                 Text(title)
                     .font(.system(size: 10.5, weight: isActive ? .medium : .regular))
@@ -596,11 +587,11 @@ struct ControlCenterPanelView: View {
             .padding(.vertical, 5)
             .background(
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(isActive ? tint.opacity(0.12) : Color.clear)
+                    .fill(isActive ? activeTint.opacity(0.08) : Color.clear)
             )
             .overlay {
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .stroke(isActive ? tint.opacity(0.28) : Color.clear, lineWidth: 0.5)
+                    .stroke(isActive ? activeTint.opacity(0.20) : Color.clear, lineWidth: 0.5)
             }
         }
         .buttonStyle(QuietSegmentButtonStyle())
@@ -755,28 +746,28 @@ struct ArrangementMiniCanvas: View {
     private func thumbnail(for p: DisplayPlacement, rect: CGRect, isDragged: Bool) -> some View {
         ZStack {
             // Monitor Frame
-            RoundedRectangle(cornerRadius: 5, style: .continuous)
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
                 .fill(
                     isDragged
-                        ? Color.accentColor.opacity(0.18)
-                        : (p.isMain ? Color.accentColor.opacity(0.10) : Color.primary.opacity(0.05))
+                        ? Color(nsColor: .controlBackgroundColor).opacity(0.65)
+                        : (p.isMain ? Color.accentColor.opacity(0.06) : Color(nsColor: .controlBackgroundColor).opacity(0.35))
                 )
                 .overlay {
-                    RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
                         .stroke(
                             isDragged
                                 ? Color.accentColor
-                                : (p.isMain ? Color.accentColor.opacity(0.55) : Color.white.opacity(0.18)),
-                            lineWidth: isDragged ? 1.2 : (p.isMain ? 0.9 : 0.5)
+                                : (p.isMain ? Color.accentColor.opacity(0.7) : Color.white.opacity(0.14)),
+                            lineWidth: isDragged ? 1.5 : (p.isMain ? 1.2 : 0.6)
                         )
                 }
-                .shadow(color: Color.black.opacity(isDragged ? 0.15 : 0.04), radius: isDragged ? 4 : 1.5, x: 0, y: isDragged ? 2 : 0.5)
+                .shadow(color: Color.black.opacity(isDragged ? 0.16 : 0.03), radius: isDragged ? 4 : 1.5, x: 0, y: isDragged ? 2 : 0.5)
 
             // Main Menu Bar Stripe
             if p.isMain {
                 VStack {
                     RoundedRectangle(cornerRadius: 1)
-                        .fill(Color.white.opacity(0.85))
+                        .fill(Color.white.opacity(0.9))
                         .frame(height: 2.5)
                         .padding(.horizontal, 2.5)
                         .padding(.top, 2)
@@ -797,8 +788,8 @@ struct ArrangementMiniCanvas: View {
             }
             .padding(3)
         }
-        .scaleEffect(isDragged ? 1.03 : 1.0)
-        .animation(.easeInOut(duration: 0.12), value: isDragged)
+        .scaleEffect(isDragged ? 1.02 : 1.0)
+        .animation(.spring(response: 0.25, dampingFraction: 0.8), value: isDragged)
     }
 
     private struct LayoutResult {

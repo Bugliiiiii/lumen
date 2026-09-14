@@ -61,8 +61,9 @@ struct DisplayModeItem: Identifiable, Hashable, Sendable {
 
 struct RecommendedMode: Identifiable, Hashable, Sendable {
     let mode: DisplayModeItem
-    let badge: String       // e.g. "⭐ 最佳推荐", "🌟 宽广工作区", "🖥️ 原生点对点"
-    let subtitle: String    // e.g. "视网膜舒适清晰 (2K 黄金比例)"
+    let badge: String       // e.g. "最佳推荐", "宽广工作区", "原生点对点"
+    let systemImage: String // e.g. "star.fill", "arrow.left.and.right", "display"
+    let subtitle: String    // e.g. "舒适且清晰", "更多工作空间", "1:1 像素映射"
     var id: UInt32 { mode.modeNumber }
 }
 
@@ -164,22 +165,22 @@ final class ResolutionController: ObservableObject {
             var recList: [RecommendedMode] = []
             if isBuiltin {
                 if let cur = current {
-                    recList.append(RecommendedMode(mode: cur, badge: "⭐ 最佳推荐", subtitle: "Apple 原厂视网膜缩放"))
+                    recList.append(RecommendedMode(mode: cur, badge: "最佳推荐", systemImage: "star.fill", subtitle: "原厂视网膜"))
                 }
-                let presets: [(key: String, badge: String, sub: String)] = [
-                    ("1710 × 1112", "🌟 宽广空间", "更多屏幕内容"),
-                    ("1710 × 1107", "🌟 宽广空间", "更多屏幕内容"),
-                    ("1470 × 956", "⭐ 舒适缩放", "默认视网膜"),
-                    ("1512 × 982", "⭐ 舒适缩放", "默认视网膜"),
-                    ("1280 × 832", "🔍 大字体", "清晰易读")
+                let presets: [(key: String, badge: String, icon: String, sub: String)] = [
+                    ("1710 × 1112", "宽广工作区", "arrow.left.and.right", "更多工作空间"),
+                    ("1710 × 1107", "宽广工作区", "arrow.left.and.right", "更多工作空间"),
+                    ("1470 × 956", "舒适缩放", "star.fill", "舒适且清晰"),
+                    ("1512 × 982", "舒适缩放", "star.fill", "舒适且清晰"),
+                    ("1280 × 832", "大字体", "textformat.size.larger", "清晰易读")
                 ]
                 for p in presets {
                     if let m = resolutionMap[p.key], m.width != current?.width || m.height != current?.height {
-                        recList.append(RecommendedMode(mode: m, badge: p.badge, subtitle: p.sub))
+                        recList.append(RecommendedMode(mode: m, badge: p.badge, systemImage: p.icon, subtitle: p.sub))
                     }
                 }
                 if recList.isEmpty, let firstHiDPI = sortedResolutions.first(where: { $0.isHiDPI }) {
-                    recList.append(RecommendedMode(mode: firstHiDPI, badge: "⭐ 最佳推荐", subtitle: "视网膜推荐缩放"))
+                    recList.append(RecommendedMode(mode: firstHiDPI, badge: "最佳推荐", systemImage: "star.fill", subtitle: "视网膜推荐缩放"))
                 }
             } else {
                 let isKnown2K = (vendor == 0x4d67 || product == 0x2725 || name.contains("H27T22S") || name.contains("2K") || name.contains("QHD"))
@@ -188,32 +189,32 @@ final class ResolutionController: ObservableObject {
 
                 if isUltraWide {
                     if let m = resolutionMap["2580 × 1080"] ?? resolutionMap["2560 × 1080"], m.isHiDPI {
-                        recList.append(RecommendedMode(mode: m, badge: "⭐ 最佳推荐", subtitle: "带鱼屏视网膜清晰度"))
+                        recList.append(RecommendedMode(mode: m, badge: "最佳推荐", systemImage: "star.fill", subtitle: "视网膜超宽清晰度"))
                     }
                     if let m = resolutionMap["3440 × 1440"] {
-                        recList.append(RecommendedMode(mode: m, badge: "🖥️ 原生点对点", subtitle: "1:1 物理像素"))
+                        recList.append(RecommendedMode(mode: m, badge: "原生点对点", systemImage: "display", subtitle: "1:1 像素映射"))
                     }
                 } else if isKnown2K || !hasReal4K {
-                    // 2K Display (like H27T22S 2560x1440) - 1080p HiDPI is the golden ratio!
+                    // 2K Display (like H27T22S 2560x1440)
                     if let m = resolutionMap["1920 × 1080"], m.isHiDPI {
-                        recList.append(RecommendedMode(mode: m, badge: "⭐ 最佳推荐", subtitle: "视网膜舒适清晰 (2K 黄金比例)"))
+                        recList.append(RecommendedMode(mode: m, badge: "最佳推荐", systemImage: "star.fill", subtitle: "舒适且清晰"))
                     }
                     if let m = resolutionMap["2048 × 1152"], m.isHiDPI {
-                        recList.append(RecommendedMode(mode: m, badge: "🌟 宽广工作区", subtitle: "多任务高效分屏"))
+                        recList.append(RecommendedMode(mode: m, badge: "宽广工作区", systemImage: "arrow.left.and.right", subtitle: "更多工作空间"))
                     }
                     if let m = resolutionMap["2560 × 1440"] {
-                        recList.append(RecommendedMode(mode: m, badge: "🖥️ 原生点对点", subtitle: "1:1 物理像素 · 最大视野"))
+                        recList.append(RecommendedMode(mode: m, badge: "原生点对点", systemImage: "display", subtitle: "1:1 像素映射"))
                     }
                 } else {
                     // Real 4K Monitor
                     if let m = resolutionMap["2560 × 1440"], m.isHiDPI {
-                        recList.append(RecommendedMode(mode: m, badge: "⭐ 最佳推荐", subtitle: "4K 视网膜黄金空间"))
+                        recList.append(RecommendedMode(mode: m, badge: "最佳推荐", systemImage: "star.fill", subtitle: "舒适且清晰"))
                     }
                     if let m = resolutionMap["1920 × 1080"], m.isHiDPI {
-                        recList.append(RecommendedMode(mode: m, badge: "🌟 舒适大字", subtitle: "2x 视网膜清晰度"))
+                        recList.append(RecommendedMode(mode: m, badge: "大字体", systemImage: "textformat.size.larger", subtitle: "清晰易读"))
                     }
                     if let m = resolutionMap["3840 × 2160"] {
-                        recList.append(RecommendedMode(mode: m, badge: "🖥️ 原生 4K", subtitle: "1:1 物理点对点"))
+                        recList.append(RecommendedMode(mode: m, badge: "原生 4K", systemImage: "display", subtitle: "1:1 像素映射"))
                     }
                 }
             }
