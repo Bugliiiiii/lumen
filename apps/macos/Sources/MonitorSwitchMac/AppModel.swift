@@ -3,7 +3,11 @@ import ServiceManagement
 
 @MainActor
 final class AppModel: ObservableObject {
-    @Published var settings: AppSettings
+    @Published var settings: AppSettings {
+        didSet {
+            settingsDidChange?()
+        }
+    }
     @Published private(set) var snapshot: MonitorSnapshot?
     @Published private(set) var statusText = "仅读取显示器，不会自动切换"
     @Published private(set) var isBusy = false
@@ -11,15 +15,18 @@ final class AppModel: ObservableObject {
 
     private let ddc = DDCService()
     private let hotKey = HotKeyController()
+    @Published private(set) var lastTargetInput: UInt8?
     var settingsDidChange: (() -> Void)?
 
     init() {
-        settings = SettingsStore.load()
+        let loaded = SettingsStore.load()
+        settings = loaded
+        lastTargetInput = loaded.macInput
         launchAtLogin = SMAppService.mainApp.status == .enabled
     }
 
     var currentInputText: String {
-        guard let input = snapshot?.currentInput else { return "未知" }
+        guard let input = snapshot?.currentInput ?? lastTargetInput else { return "未知" }
         let friendly = InputSourceCatalog.friendlyName(for: input, settings: settings)
         return "● \(friendly) · \(InputSourceCatalog.connectorName(for: input))"
     }
@@ -34,12 +41,17 @@ final class AppModel: ObservableObject {
         isBusy = true
         statusText = "正在读取 DDC/CI…"
         do {
-            snapshot = try ddc.scan(monitorHint: settings.monitorHint)
+            let result = try ddc.scan(monitorHint: settings.monitorHint)
+            snapshot = result
+            lastTargetInput = result.currentInput
             statusText = "已检测到输入源，可以执行切换"
         } catch {
-            snapshot = nil
-            statusText = error.localizedDescription
-            if showError { presentError(error) }
+            if let ddcErr = error as? DDCServiceError, case .unreadableInput = ddcErr {
+                statusText = "线材不支持状态回读（不影响切换，可在下方直接配置）"
+            } else {
+                statusText = error.localizedDescription
+                if showError { presentError(error) }
+            }
         }
         isBusy = false
         settingsDidChange?()
@@ -52,12 +64,54 @@ final class AppModel: ObservableObject {
         statusText = "正在发送切换命令…"
         do {
             try ddc.switchInput(monitorHint: settings.monitorHint, input: settings.windowsInput)
-            statusText = "已发送切换到 Windows"
+            lastTargetInput = settings.windowsInput
+            if let current = snapshot {
+                snapshot = MonitorSnapshot(
+                    name: current.name,
+                    serial: current.serial,
+                    currentInput: settings.windowsInput,
+                    connection: current.connection
+                )
+            }
+            statusText = "已发送切换到 \(settings.windowsLabel)"
         } catch {
             statusText = error.localizedDescription
             presentError(error)
         }
         settingsDidChange?()
+    }
+
+    func switchToMac() {
+        guard !isBusy else { return }
+        isBusy = true
+        defer { isBusy = false }
+        statusText = "正在发送切换命令…"
+        do {
+            try ddc.switchInput(monitorHint: settings.monitorHint, input: settings.macInput)
+            lastTargetInput = settings.macInput
+            if let current = snapshot {
+                snapshot = MonitorSnapshot(
+                    name: current.name,
+                    serial: current.serial,
+                    currentInput: settings.macInput,
+                    connection: current.connection
+                )
+            }
+            statusText = "已发送切换到 \(settings.macLabel)"
+        } catch {
+            statusText = error.localizedDescription
+            presentError(error)
+        }
+        settingsDidChange?()
+    }
+
+    func toggleInput() {
+        let current = snapshot?.currentInput ?? lastTargetInput
+        if current == settings.windowsInput {
+            switchToMac()
+        } else {
+            switchToWindows()
+        }
     }
 
     func save() {
@@ -87,7 +141,7 @@ final class AppModel: ObservableObject {
 
     private func registerHotKeyOrThrow() throws {
         try hotKey.register(settings: settings) { [weak self] in
-            Task { @MainActor in self?.switchToWindows() }
+            Task { @MainActor in self?.toggleInput() }
         }
     }
 

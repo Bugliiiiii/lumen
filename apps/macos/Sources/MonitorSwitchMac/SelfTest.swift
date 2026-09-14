@@ -10,7 +10,8 @@ enum SelfTest {
             try checkConnectorNames()
             try checkSettingsRoundTrip()
             try renderSettingsView()
-            print("MonitorSwitchMac self-test: 12 assertions passed")
+            try renderControlCenterView()
+            print("MonitorSwitchMac self-test: 14 assertions passed")
             return 0
         } catch {
             fputs("MonitorSwitchMac self-test failed: \(error)\n", stderr)
@@ -70,6 +71,31 @@ enum SelfTest {
         }
         try require(png.count > 10_000, "settings PNG is empty")
         try png.write(to: URL(fileURLWithPath: "/private/tmp/monitor-switch-settings-preview.png"), options: .atomic)
+    }
+
+    @MainActor
+    private static func renderControlCenterView() throws {
+        let model = AppModel()
+        let view = ControlCenterPanelView(
+            appModel: model,
+            onOpenSettings: {},
+            onQuit: {}
+        )
+        let hostingView = NSHostingView(rootView: view)
+        let size = hostingView.fittingSize
+        try require(size.width <= 360, "control center width is \(size.width)")
+        hostingView.frame = NSRect(origin: .zero, size: size)
+        hostingView.layoutSubtreeIfNeeded()
+
+        guard let representation = hostingView.bitmapImageRepForCachingDisplay(in: hostingView.bounds) else {
+            throw SelfTestError.assertion("control center bitmap")
+        }
+        hostingView.cacheDisplay(in: hostingView.bounds, to: representation)
+        guard let png = representation.representation(using: .png, properties: [:]) else {
+            throw SelfTestError.assertion("control center PNG")
+        }
+        try require(png.count > 5_000, "control center PNG is empty")
+        try png.write(to: URL(fileURLWithPath: "/private/tmp/monitor-switch-cc-preview.png"), options: .atomic)
     }
 }
 

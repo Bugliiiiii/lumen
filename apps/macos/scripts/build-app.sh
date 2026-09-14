@@ -23,6 +23,9 @@ rm -rf "$app_dir"
 mkdir -p "$app_dir/Contents/MacOS" "$app_dir/Contents/Resources"
 cp "$bin_dir/MonitorSwitchMac" "$app_dir/Contents/MacOS/MonitorSwitchMac"
 cp "$project_dir/Resources/Info.plist" "$app_dir/Contents/Info.plist"
+if [[ -f "$project_dir/Resources/AppIcon.icns" ]]; then
+  cp "$project_dir/Resources/AppIcon.icns" "$app_dir/Contents/Resources/AppIcon.icns"
+fi
 codesign --force --deep --sign - "$app_dir"
 
 echo "$app_dir"

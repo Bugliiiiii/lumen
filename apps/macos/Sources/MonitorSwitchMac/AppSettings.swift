@@ -1,3 +1,4 @@
+import AppKit
 import Carbon.HIToolbox
 import Foundation
 
@@ -15,6 +16,15 @@ struct ShortcutModifiers: OptionSet, Codable, Equatable {
         if contains(.option) { result |= UInt32(optionKey) }
         if contains(.control) { result |= UInt32(controlKey) }
         if contains(.shift) { result |= UInt32(shiftKey) }
+        return result
+    }
+
+    var nsModifierFlags: NSEvent.ModifierFlags {
+        var result: NSEvent.ModifierFlags = []
+        if contains(.command) { result.insert(.command) }
+        if contains(.option) { result.insert(.option) }
+        if contains(.control) { result.insert(.control) }
+        if contains(.shift) { result.insert(.shift) }
         return result
     }
 
@@ -38,6 +48,23 @@ struct AppSettings: Codable, Equatable {
     var shortcutKey = "S"
 
     var shortcutText: String { "\(shortcutModifiers.displayText)\(shortcutKey)" }
+
+    enum CodingKeys: String, CodingKey {
+        case monitorHint, windowsInput, macInput, windowsLabel, macLabel, shortcutModifiers, shortcutKey
+    }
+
+    init() {}
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        monitorHint = try container.decodeIfPresent(String.self, forKey: .monitorHint) ?? "H27T22S"
+        windowsInput = try container.decodeIfPresent(UInt8.self, forKey: .windowsInput) ?? InputSourceCatalog.windowsValue
+        macInput = try container.decodeIfPresent(UInt8.self, forKey: .macInput) ?? InputSourceCatalog.macValue
+        windowsLabel = try container.decodeIfPresent(String.self, forKey: .windowsLabel) ?? "Windows"
+        macLabel = try container.decodeIfPresent(String.self, forKey: .macLabel) ?? "Mac"
+        shortcutModifiers = try container.decodeIfPresent(ShortcutModifiers.self, forKey: .shortcutModifiers) ?? [.option, .command]
+        shortcutKey = try container.decodeIfPresent(String.self, forKey: .shortcutKey) ?? "S"
+    }
 }
 
 enum SettingsStore {
