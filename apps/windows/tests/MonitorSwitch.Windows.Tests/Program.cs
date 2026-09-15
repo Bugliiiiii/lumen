@@ -91,9 +91,9 @@ AssertEqual(false, customHintSettings.MigrateLegacySettings(), "custom hint not 
 AssertEqual("Dell U2720Q", customHintSettings.MonitorHint, "custom hint preserved");
 
 // 5. UpdateManager tests
-AssertEqual(true, UpdateManager.IsVersionNewer("v0.4.0", "0.3.0"), "newer release version");
-AssertEqual(false, UpdateManager.IsVersionNewer("v0.3.0", "0.3.0"), "same release version");
-AssertEqual(false, UpdateManager.IsVersionNewer("not-a-version", "0.3.0"), "invalid release version");
+AssertEqual(true, UpdateManager.IsVersionNewer("v0.5.0", "0.4.0"), "newer release version");
+AssertEqual(false, UpdateManager.IsVersionNewer("v0.4.0", "0.4.0"), "same release version");
+AssertEqual(false, UpdateManager.IsVersionNewer("not-a-version", "0.4.0"), "invalid release version");
 
 // 6. DdcMonitorService manufacturer and name formatting
 AssertEqual("AOC", DdcMonitorService.DecodeManufacturer(0x05E3), "decode AOC manufacturer");

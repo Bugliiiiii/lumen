@@ -33,10 +33,10 @@ enum SelfTest {
         try require(settings.macInput == 0x11, "Mac input must be HDMI1")
         try require(settings.shortcutText == "⌥⌘S", "default shortcut must be Option-Command-S")
         try require(settings.automaticallyChecksForUpdates, "automatic update checks enabled by default")
-        try require(UpdateService.isVersionNewer("v0.4.0", than: "0.3.0"), "newer release version")
-        try require(!UpdateService.isVersionNewer("v0.3.0", than: "0.3.0"), "same release version")
+        try require(UpdateService.isVersionNewer("v0.5.0", than: "0.4.0"), "newer release version")
+        try require(!UpdateService.isVersionNewer("v0.4.0", than: "0.4.0"), "same release version")
         try require(UpdateService.isVersionNewer("v1.0", than: "0.9.9"), "major release version")
-        try require(!UpdateService.isVersionNewer("invalid", than: "0.3.0"), "invalid release version")
+        try require(!UpdateService.isVersionNewer("invalid", than: "0.4.0"), "invalid release version")
     }
 
     private static func checkConnectorNames() throws {
