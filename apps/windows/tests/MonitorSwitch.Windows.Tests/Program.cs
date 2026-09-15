@@ -126,6 +126,8 @@ var u27e40 = new MonitorSnapshot(
 AssertEqual(true, u27e40.Is4K, "U27E40 is 4K");
 AssertEqual("3840 × 2160", u27e40.NativeResolutionText, "U27E40 native resolution");
 AssertEqual("2560 × 1440 @ 60Hz", u27e40.CurrentModeText, "U27E40 current logical mode");
+AssertEqual(150, u27e40.ScalePercent, "U27E40 scale percent");
+AssertEqual("2560 × 1440 · 150% · 60Hz", u27e40.FormattedModeText, "U27E40 formatted mode");
 AssertEqual("可用", u27e40.DdcStatusText, "U27E40 DDC status");
 AssertEqual(true, u27e40.IsBrightnessSupported, "U27E40 brightness supported");
 AssertEqual(true, u27e40.IsVolumeSupported, "U27E40 volume supported");

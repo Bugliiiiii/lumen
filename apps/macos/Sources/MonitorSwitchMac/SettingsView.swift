@@ -95,7 +95,7 @@ struct SettingsView: View {
                                 VStack(alignment: .leading, spacing: 1) {
                                     Text("显示规格")
                                         .font(.system(size: 12))
-                                    Text("原生 \(snap.nativeResolutionText) · \(snap.logicalModeText)")
+                                    Text(snap.logicalModeText)
                                         .font(.system(size: 10))
                                         .foregroundStyle(.secondary)
                                 }

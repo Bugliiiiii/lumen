@@ -60,10 +60,17 @@ struct MonitorSnapshot: Equatable, Sendable {
         return "\(nativeWidth) × \(nativeHeight)"
     }
 
+    var scalePercent: Int? {
+        guard nativeWidth > 0, logicalWidth > 0 else { return nil }
+        return Int(round(Double(nativeWidth) / Double(logicalWidth) * 100))
+    }
+
     var logicalModeText: String {
         guard logicalWidth > 0 && logicalHeight > 0 else { return "未知" }
-        let hidpiSuffix = isHiDPI ? " HiDPI" : ""
-        return "看起来像 \(logicalWidth) × \(logicalHeight)\(hidpiSuffix)"
+        if let scale = scalePercent {
+            return "\(logicalWidth) × \(logicalHeight) · \(scale)%"
+        }
+        return "\(logicalWidth) × \(logicalHeight)"
     }
 }
 

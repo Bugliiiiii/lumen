@@ -88,7 +88,7 @@ struct DisplayModeItem: Identifiable, Hashable, Sendable {
 
 struct RecommendedMode: Identifiable, Hashable, Sendable {
     let mode: DisplayModeItem
-    let badge: String       // e.g. "最佳推荐", "宽广工作区", "原生点对点"
+    let badge: String       // e.g. "最佳推荐", "宽广工作区", "点对点"
     let systemImage: String // e.g. "star.fill", "arrow.left.and.right", "display"
     let subtitle: String    // e.g. "舒适且清晰", "更多工作空间", "1:1 像素映射"
     var id: UInt32 { mode.modeNumber }
@@ -128,6 +128,30 @@ struct ManagedDisplay: Identifiable, Equatable {
     var isAtTopRecommended: Bool {
         guard let cur = currentMode, let top = topRecommendedMode else { return false }
         return cur.width == top.width && cur.height == top.height && cur.isHiDPI == top.isHiDPI
+    }
+
+    func scalePercent(for width: Int) -> Int? {
+        guard nativeWidth > 0, width > 0 else { return nil }
+        return Int(round(Double(nativeWidth) / Double(width) * 100))
+    }
+
+    var currentScalePercent: Int? {
+        guard let cur = currentMode else { return nil }
+        return scalePercent(for: cur.width)
+    }
+
+    func modeTitle(for mode: DisplayModeItem) -> String {
+        if let scale = scalePercent(for: mode.width) {
+            return "\(mode.width) × \(mode.height) · \(scale)%"
+        }
+        return mode.displayName
+    }
+
+    var currentFormattedMode: String {
+        guard let cur = currentMode else { return "未知" }
+        let scaleText = currentScalePercent.map { " · \($0)%" } ?? ""
+        let mirrorSuffix = isMirrored ? " (镜像)" : ""
+        return "\(cur.width) × \(cur.height)\(scaleText) · \(cur.refreshRate) Hz\(mirrorSuffix)"
     }
 }
 
@@ -264,7 +288,7 @@ final class ResolutionController: ObservableObject {
                         recList.append(RecommendedMode(mode: m, badge: "最佳推荐", systemImage: "star.fill", subtitle: "视网膜超宽清晰度"))
                     }
                     if let m = resolutionMap["3440 × 1440"] {
-                        recList.append(RecommendedMode(mode: m, badge: "原生点对点", systemImage: "display", subtitle: "1:1 像素映射"))
+                        recList.append(RecommendedMode(mode: m, badge: "点对点", systemImage: "display", subtitle: "1:1 像素映射"))
                     }
                 } else if isKnown2K || !hasReal4K {
                     // 2K Display (like H27T22S 2560x1440)
@@ -275,7 +299,7 @@ final class ResolutionController: ObservableObject {
                         recList.append(RecommendedMode(mode: m, badge: "宽广工作区", systemImage: "arrow.left.and.right", subtitle: "更多工作空间"))
                     }
                     if let m = resolutionMap["2560 × 1440"] {
-                        recList.append(RecommendedMode(mode: m, badge: "原生点对点", systemImage: "display", subtitle: "1:1 像素映射"))
+                        recList.append(RecommendedMode(mode: m, badge: "点对点", systemImage: "display", subtitle: "1:1 像素映射"))
                     }
                 } else {
                     // Real 4K Monitor
@@ -286,7 +310,7 @@ final class ResolutionController: ObservableObject {
                         recList.append(RecommendedMode(mode: m, badge: "大字体", systemImage: "textformat.size.larger", subtitle: "清晰易读"))
                     }
                     if let m = resolutionMap["3840 × 2160"] {
-                        recList.append(RecommendedMode(mode: m, badge: "原生 4K", systemImage: "display", subtitle: "1:1 像素映射"))
+                        recList.append(RecommendedMode(mode: m, badge: "点对点", systemImage: "display", subtitle: "1:1 像素映射"))
                     }
                 }
             }

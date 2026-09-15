@@ -35,12 +35,21 @@ public sealed record MonitorSnapshot(
             ? $"{NativeWidth} × {NativeHeight}"
             : "未知";
 
-    public string CurrentModeText =>
-        CurrentWidth > 0 && CurrentHeight > 0
-            ? (RefreshRate > 0
-                ? $"{CurrentWidth} × {CurrentHeight} @ {RefreshRate}Hz"
-                : $"{CurrentWidth} × {CurrentHeight}")
-            : "未知";
+    public int? ScalePercent =>
+        NativeWidth > 0 && CurrentWidth > 0
+            ? (int)Math.Round((double)NativeWidth / CurrentWidth * 100)
+            : null;
+
+    public string FormattedModeText
+    {
+        get
+        {
+            if (CurrentWidth <= 0 || CurrentHeight <= 0) return "未知";
+            var scale = ScalePercent.HasValue ? $" · {ScalePercent.Value}%" : "";
+            var refresh = RefreshRate > 0 ? $" · {RefreshRate}Hz" : "";
+            return $"{CurrentWidth} × {CurrentHeight}{scale}{refresh}";
+        }
+    }
 
     public string DdcStatusText => IsDdcSupported ? "可用" : "不可读取";
 }

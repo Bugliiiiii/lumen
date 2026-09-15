@@ -91,7 +91,8 @@ enum SelfTest {
         )
         try require(u27e40.is4K, "u27e40 is 4K")
         try require(u27e40.nativeResolutionText == "3840 × 2160", "native 4K resolution text")
-        try require(u27e40.logicalModeText == "看起来像 2560 × 1440 HiDPI", "logical mode text")
+        try require(u27e40.logicalModeText == "2560 × 1440 · 150%", "logical mode text matches Crisp style")
+        try require(u27e40.scalePercent == 150, "u27e40 scale percent is 150%")
         try require(u27e40.refreshRate == 60, "u27e40 refresh rate is 60")
 
         // 2. Legacy KTC settings migration

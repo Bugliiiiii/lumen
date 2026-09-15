@@ -281,19 +281,11 @@ struct ControlCenterPanelView: View {
                             .foregroundStyle(Color.primary)
 
                         if let cur = display.currentMode {
-                            let hidpiSuffix = cur.isHiDPI ? " · HiDPI" : ""
                             let mirrorSuffix = display.isMirrored ? " (镜像)" : ""
-                            Group {
-                                if !display.isBuiltin && display.nativeWidth > 0 && display.nativeHeight > 0 {
-                                    let scalePrefix = cur.isHiDPI ? "看起来像 " : ""
-                                    Text("原生 \(display.nativeWidth) × \(display.nativeHeight) · \(scalePrefix)\(cur.width) × \(cur.height)\(hidpiSuffix) · \(cur.refreshRate) Hz\(mirrorSuffix)")
-                                        .font(.system(size: 9.5))
-                                } else {
-                                    Text("\(cur.width) × \(cur.height) · \(cur.refreshRate) Hz\(hidpiSuffix)\(mirrorSuffix)")
-                                        .font(.system(size: 10))
-                                }
-                            }
-                            .foregroundStyle(Color.secondary)
+                            let scaleText = display.currentScalePercent.map { " · \($0)%" } ?? ""
+                            Text("\(cur.width) × \(cur.height)\(scaleText) · \(cur.refreshRate) Hz\(mirrorSuffix)")
+                                .font(.system(size: 10))
+                                .foregroundStyle(Color.secondary)
                             .contextMenu {
                                 if !display.isBuiltin && resController.activeDisplayCount > 1 {
                                     Button(role: .destructive) {
@@ -536,7 +528,7 @@ struct ControlCenterPanelView: View {
                             } label: {
                                 HStack {
                                     Label(rec.badge, systemImage: rec.systemImage)
-                                    Text("\(rec.mode.displayName) · \(rec.subtitle)")
+                                    Text("\(display.modeTitle(for: rec.mode)) · \(rec.subtitle)")
                                     if display.currentMode?.width == rec.mode.width && display.currentMode?.height == rec.mode.height && display.currentMode?.isHiDPI == rec.mode.isHiDPI {
                                         Image(systemName: "checkmark")
                                     }
@@ -553,7 +545,7 @@ struct ControlCenterPanelView: View {
                                 resController.setMode(mode, for: display.displayID)
                             } label: {
                                 HStack {
-                                    Text(mode.displayName)
+                                    Text(display.modeTitle(for: mode))
                                     if display.currentMode?.width == mode.width && display.currentMode?.height == mode.height && display.currentMode?.isHiDPI == mode.isHiDPI {
                                         Image(systemName: "checkmark")
                                     }
@@ -570,7 +562,7 @@ struct ControlCenterPanelView: View {
                                 resController.setMode(mode, for: display.displayID)
                             } label: {
                                 HStack {
-                                    Text(mode.displayName)
+                                    Text(display.modeTitle(for: mode))
                                     if display.currentMode?.width == mode.width && display.currentMode?.height == mode.height {
                                         Image(systemName: "checkmark")
                                     }
@@ -582,7 +574,7 @@ struct ControlCenterPanelView: View {
                     }
                 }
             } label: {
-                Text(display.currentMode?.displayName ?? "选择")
+                Text(display.currentMode.map { display.modeTitle(for: $0) } ?? "选择")
                     .font(.system(size: 10.5))
                     .foregroundStyle(Color.secondary)
             }

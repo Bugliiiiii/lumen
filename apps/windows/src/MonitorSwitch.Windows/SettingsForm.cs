@@ -379,7 +379,7 @@ internal sealed class SettingsForm : Form
         {
             var snapshot = await _scan();
             _monitorValue.Text = snapshot.Description;
-            _displayModeValue.Text = $"原生：{snapshot.NativeResolutionText}   当前：{snapshot.CurrentModeText}";
+            _displayModeValue.Text = snapshot.FormattedModeText;
             if (snapshot.IsDdcSupported)
             {
                 _connectionBadge.SetAppearance("● 在线", Color.FromArgb(15, 123, 15), Color.FromArgb(233, 247, 233));
