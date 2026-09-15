@@ -40,6 +40,13 @@ public sealed record MonitorSnapshot(
             ? (int)Math.Round((double)NativeWidth / CurrentWidth * 100)
             : null;
 
+    public string CurrentModeText =>
+        CurrentWidth > 0 && CurrentHeight > 0
+            ? (RefreshRate > 0
+                ? $"{CurrentWidth} × {CurrentHeight} @ {RefreshRate}Hz"
+                : $"{CurrentWidth} × {CurrentHeight}")
+            : "未知";
+
     public string FormattedModeText
     {
         get
