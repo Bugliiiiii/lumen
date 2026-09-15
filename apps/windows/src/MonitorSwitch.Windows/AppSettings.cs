@@ -13,7 +13,8 @@ public enum HotkeyModifiers : uint
 
 public sealed class AppSettings
 {
-    public string MonitorHint { get; set; } = "KTC H27T22S";
+    public string MonitorHint { get; set; } = string.Empty;
+    public string SelectedMonitorId { get; set; } = string.Empty;
     public byte WindowsInput { get; set; } = 0x0F;
     public byte MacInput { get; set; } = 0x11;
     public string WindowsLabel { get; set; } = "Windows";
@@ -27,6 +28,7 @@ public sealed class AppSettings
     public AppSettings Copy() => new()
     {
         MonitorHint = MonitorHint,
+        SelectedMonitorId = SelectedMonitorId,
         WindowsInput = WindowsInput,
         MacInput = MacInput,
         WindowsLabel = WindowsLabel,
@@ -39,6 +41,7 @@ public sealed class AppSettings
     public void Apply(AppSettings source)
     {
         MonitorHint = source.MonitorHint;
+        SelectedMonitorId = source.SelectedMonitorId;
         WindowsInput = source.WindowsInput;
         MacInput = source.MacInput;
         WindowsLabel = source.WindowsLabel;
@@ -46,6 +49,20 @@ public sealed class AppSettings
         HotkeyModifiers = source.HotkeyModifiers;
         HotkeyKey = source.HotkeyKey;
         AutomaticallyChecksForUpdates = source.AutomaticallyChecksForUpdates;
+    }
+
+    public bool MigrateLegacySettings() => MigrateLegacySettings(this);
+
+    public static bool MigrateLegacySettings(AppSettings settings)
+    {
+        if (string.Equals(settings.MonitorHint, "KTC H27T22S", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(settings.MonitorHint, "H27T22S", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(settings.MonitorHint, "KTC", StringComparison.OrdinalIgnoreCase))
+        {
+            settings.MonitorHint = string.Empty;
+            return true;
+        }
+        return false;
     }
 
     private static string FormatModifiers(HotkeyModifiers modifiers)
@@ -71,9 +88,13 @@ public static class SettingsStore
     {
         try
         {
-            return File.Exists(FilePath)
-                ? JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(FilePath), JsonOptions) ?? new AppSettings()
-                : new AppSettings();
+            if (File.Exists(FilePath))
+            {
+                var settings = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(FilePath), JsonOptions) ?? new AppSettings();
+                AppSettings.MigrateLegacySettings(settings);
+                return settings;
+            }
+            return new AppSettings();
         }
         catch (Exception exception) when (exception is JsonException or IOException or UnauthorizedAccessException)
         {

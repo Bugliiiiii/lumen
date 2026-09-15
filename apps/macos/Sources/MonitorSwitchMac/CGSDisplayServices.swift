@@ -104,12 +104,20 @@ struct ManagedDisplay: Identifiable, Equatable {
     var isDisconnected: Bool = false
     let vendorID: UInt32
     let productID: UInt32
+    var nativeWidth: Int = 0
+    var nativeHeight: Int = 0
+    var isDDCSupported: Bool = false
     var currentMode: DisplayModeItem?
     var recommendedModes: [RecommendedMode]
     var standardModes: [DisplayModeItem]
     var fineTuningModes: [DisplayModeItem]
     var availableResolutions: [DisplayModeItem]
     var availableRefreshRates: [Int]
+
+    var is4K: Bool {
+        (nativeWidth >= 3840 && nativeHeight >= 2160)
+            || availableResolutions.contains(where: { $0.width >= 3840 && $0.height >= 2160 && !$0.isHiDPI })
+    }
 
     var id: CGDirectDisplayID { displayID }
 
@@ -172,6 +180,7 @@ final class ResolutionController: ObservableObject {
             }
         }
 
+        let discovered = DisplayDiscoveryService.shared.discoverMonitors()
         var list: [ManagedDisplay] = []
 
         for did in displayIDs.prefix(Int(count)) {
@@ -183,17 +192,26 @@ final class ResolutionController: ObservableObject {
             let isMirrored = CGDisplayMirrorsDisplay(did) != 0 || CGDisplayIsInMirrorSet(did) != 0
             let mirrorMaster = CGDisplayMirrorsDisplay(did) != 0 ? CGDisplayMirrorsDisplay(did) : nil
 
+            let matchedMonitor = discovered.first(where: { $0.displayID == did })
             var name = isBuiltin ? "内建显示器" : "外接显示器"
-            if !isBuiltin {
-                if vendor == 0x4d67 || product == 0x2725 {
-                    name = "H27T22S"
-                } else if let dict = CoreDisplayDictionary(for: did) {
+            if let monitor = matchedMonitor, !isBuiltin {
+                name = monitor.name
+            } else if !isBuiltin {
+                if let dict = CoreDisplayDictionary(for: did) {
                     name = dict
                 }
             }
 
             let allModes = fetchModes(for: did)
             let current = currentMode(for: did, allModes: allModes)
+            var nativeW = matchedMonitor?.nativeWidth ?? 0
+            var nativeH = matchedMonitor?.nativeHeight ?? 0
+            if nativeW == 0 {
+                let maxPixelMode = allModes.max(by: { ($0.width * $0.height) < ($1.width * $1.height) })
+                nativeW = maxPixelMode?.width ?? 1920
+                nativeH = maxPixelMode?.height ?? 1080
+            }
+            let isDDCSupported = matchedMonitor?.isDDCSupported ?? false
 
             // Distinct resolutions: prefer HiDPI mode, highest refresh
             var resolutionMap: [String: DisplayModeItem] = [:]
@@ -302,6 +320,9 @@ final class ResolutionController: ObservableObject {
                 isDisconnected: false,
                 vendorID: vendor,
                 productID: product,
+                nativeWidth: nativeW,
+                nativeHeight: nativeH,
+                isDDCSupported: isDDCSupported,
                 currentMode: current,
                 recommendedModes: recList,
                 standardModes: standardModes,
@@ -472,23 +493,11 @@ final class ResolutionController: ObservableObject {
 
 
     private func CoreDisplayDictionary(for displayID: CGDirectDisplayID) -> String? {
-        var iterator: io_iterator_t = 0
-        let matching = IOServiceMatching("IODisplayConnect")
-        guard IOServiceGetMatchingServices(kIOMainPortDefault, matching, &iterator) == KERN_SUCCESS else { return nil }
-        defer { IOObjectRelease(iterator) }
-
-        var service = IOIteratorNext(iterator)
-        while service != 0 {
-            defer {
-                IOObjectRelease(service)
-                service = IOIteratorNext(iterator)
-            }
-            guard let cfDict = IODisplayCreateInfoDictionary(service, IOOptionBits(kIODisplayOnlyPreferredName))?.takeRetainedValue() as? [String: Any] else {
-                continue
-            }
-            if let names = cfDict["DisplayProductName"] as? [String: String], let first = names.values.first {
-                return first
-            }
+        guard let cfDict = CoreDisplay_DisplayCreateInfoDictionary(displayID)?.takeRetainedValue() as? [String: Any] else {
+            return nil
+        }
+        if let names = cfDict["DisplayProductName"] as? [String: String] {
+            return names["zh_CN"] ?? names["en_US"] ?? names.values.first
         }
         return nil
     }

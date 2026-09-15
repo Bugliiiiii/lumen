@@ -7,7 +7,9 @@ internal sealed class TrayApplicationContext : ApplicationContext
     private readonly HotkeyWindow _hotkey = new();
     private readonly UpdateManager _updateManager = new();
     private readonly NotifyIcon _trayIcon;
+    private readonly ToolStripMenuItem _monitorNameItem;
     private readonly ToolStripMenuItem _currentInputItem;
+    private readonly ToolStripMenuItem _switchToMacItem;
     private readonly ToolStripMenuItem _updateItem;
     private readonly System.Windows.Forms.Timer? _initialUpdateTimer;
     private SettingsForm? _settingsForm;
@@ -15,14 +17,16 @@ internal sealed class TrayApplicationContext : ApplicationContext
     internal TrayApplicationContext()
     {
         _settings = SettingsStore.Load();
+        _monitorNameItem = new ToolStripMenuItem("外接显示器") { Enabled = false };
         _currentInputItem = new ToolStripMenuItem("当前输入：等待扫描") { Enabled = false };
+        _switchToMacItem = new ToolStripMenuItem(SwitchToMacMenuText(), null, async (_, _) => await SwitchToMacAsync());
         _updateItem = new ToolStripMenuItem("检查更新…", null, async (_, _) => await HandleUpdateMenuAsync());
 
         var menu = new ContextMenuStrip();
-        menu.Items.Add(new ToolStripMenuItem("KTC H27T22S") { Enabled = false });
+        menu.Items.Add(_monitorNameItem);
         menu.Items.Add(_currentInputItem);
         menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add("切换到 Mac · HDMI 1", null, async (_, _) => await SwitchToMacAsync());
+        menu.Items.Add(_switchToMacItem);
         menu.Items.Add("扫描显示器", null, async (_, _) => await RefreshCurrentInputAsync(showErrors: true));
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(_updateItem);
@@ -60,23 +64,28 @@ internal sealed class TrayApplicationContext : ApplicationContext
         }
     }
 
+    private string SwitchToMacMenuText() =>
+        $"切换到 {_settings.MacLabel} · {InputSourceCatalog.ConnectorName(_settings.MacInput)}";
+
     private void RegisterHotkey(AppSettings? settings = null)
     {
         _hotkey.Register(settings ?? _settings, () => _ = SwitchToMacAsync());
     }
 
     private async Task<MonitorSnapshot> ScanAsync() =>
-        await Task.Run(() => _ddc.Scan(_settings.MonitorHint));
+        await Task.Run(() => _ddc.Scan(_settings.SelectedMonitorId, _settings.MonitorHint));
 
     private async Task RefreshCurrentInputAsync(bool showErrors)
     {
         try
         {
             var snapshot = await ScanAsync();
+            _monitorNameItem.Text = snapshot.Description;
             _currentInputItem.Text = snapshot.CurrentInput switch
             {
-                var input when input == _settings.WindowsInput => "当前输入：Windows · DisplayPort 1",
-                var input when input == _settings.MacInput => "当前输入：Mac · HDMI 1",
+                var input when input == _settings.WindowsInput => $"当前输入：{_settings.WindowsLabel} · {InputSourceCatalog.ConnectorName(_settings.WindowsInput)}",
+                var input when input == _settings.MacInput => $"当前输入：{_settings.MacLabel} · {InputSourceCatalog.ConnectorName(_settings.MacInput)}",
+                0 => snapshot.IsDdcSupported ? "当前输入：未知" : "当前输入：不可读取",
                 _ => $"当前输入：{InputSourceCatalog.ConnectorName(snapshot.CurrentInput)}",
             };
         }
@@ -91,7 +100,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
     {
         try
         {
-            await Task.Run(() => _ddc.SwitchInput(_settings.MonitorHint, _settings.MacInput));
+            await Task.Run(() => _ddc.SwitchInput(_settings.SelectedMonitorId, _settings.MonitorHint, _settings.MacInput));
         }
         catch (Exception exception)
         {
@@ -177,6 +186,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
                 RegisterHotkey(settings);
                 SettingsStore.Save(settings);
                 _settings.Apply(settings);
+                _switchToMacItem.Text = SwitchToMacMenuText();
             },
             _updateManager);
         _settingsForm.FormClosed += (_, _) => _settingsForm = null;

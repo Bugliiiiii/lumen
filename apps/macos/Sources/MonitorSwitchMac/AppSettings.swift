@@ -39,7 +39,8 @@ struct ShortcutModifiers: OptionSet, Codable, Equatable {
 }
 
 struct AppSettings: Codable, Equatable {
-    var monitorHint = "H27T22S"
+    var monitorHint = ""
+    var selectedMonitorId: String? = nil
     var windowsInput: UInt8 = InputSourceCatalog.windowsValue
     var macInput: UInt8 = InputSourceCatalog.macValue
     var windowsLabel = "Windows"
@@ -51,7 +52,7 @@ struct AppSettings: Codable, Equatable {
     var shortcutText: String { "\(shortcutModifiers.displayText)\(shortcutKey)" }
 
     enum CodingKeys: String, CodingKey {
-        case monitorHint, windowsInput, macInput, windowsLabel, macLabel, shortcutModifiers, shortcutKey
+        case monitorHint, selectedMonitorId, windowsInput, macInput, windowsLabel, macLabel, shortcutModifiers, shortcutKey
         case automaticallyChecksForUpdates
     }
 
@@ -59,7 +60,13 @@ struct AppSettings: Codable, Equatable {
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        monitorHint = try container.decodeIfPresent(String.self, forKey: .monitorHint) ?? "H27T22S"
+        let rawHint = try container.decodeIfPresent(String.self, forKey: .monitorHint) ?? ""
+        if rawHint == "H27T22S" || rawHint == "KTC H27T22S" || rawHint == "KTC" {
+            monitorHint = ""
+        } else {
+            monitorHint = rawHint
+        }
+        selectedMonitorId = try container.decodeIfPresent(String.self, forKey: .selectedMonitorId)
         windowsInput = try container.decodeIfPresent(UInt8.self, forKey: .windowsInput) ?? InputSourceCatalog.windowsValue
         macInput = try container.decodeIfPresent(UInt8.self, forKey: .macInput) ?? InputSourceCatalog.macValue
         windowsLabel = try container.decodeIfPresent(String.self, forKey: .windowsLabel) ?? "Windows"

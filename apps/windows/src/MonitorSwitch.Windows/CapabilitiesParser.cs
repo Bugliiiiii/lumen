@@ -11,6 +11,15 @@ public static partial class CapabilitiesParser
     [GeneratedRegex(@"(?<![0-9a-z])(?:0x)?([0-9a-f]{1,2})(?![0-9a-z])", RegexOptions.IgnoreCase)]
     private static partial Regex HexValueRegex();
 
+    [GeneratedRegex(@"model\s*\(([^)]+)\)", RegexOptions.IgnoreCase)]
+    private static partial Regex ModelRegex();
+
+    [GeneratedRegex(@"(?<![0-9a-z])10(?![0-9a-z])", RegexOptions.IgnoreCase)]
+    private static partial Regex BrightnessVcpRegex();
+
+    [GeneratedRegex(@"(?<![0-9a-z])62(?![0-9a-z])", RegexOptions.IgnoreCase)]
+    private static partial Regex VolumeVcpRegex();
+
     public static IReadOnlyList<byte> ParseInputSources(string? capabilities)
     {
         if (string.IsNullOrWhiteSpace(capabilities))
@@ -29,4 +38,21 @@ public static partial class CapabilitiesParser
             .Distinct()
             .ToList();
     }
+
+    public static string? ParseModel(string? capabilities)
+    {
+        if (string.IsNullOrWhiteSpace(capabilities))
+        {
+            return null;
+        }
+
+        var match = ModelRegex().Match(capabilities);
+        return match.Success ? match.Groups[1].Value.Trim() : null;
+    }
+
+    public static bool HasBrightnessSupport(string? capabilities) =>
+        !string.IsNullOrWhiteSpace(capabilities) && BrightnessVcpRegex().IsMatch(capabilities);
+
+    public static bool HasVolumeSupport(string? capabilities) =>
+        !string.IsNullOrWhiteSpace(capabilities) && VolumeVcpRegex().IsMatch(capabilities);
 }

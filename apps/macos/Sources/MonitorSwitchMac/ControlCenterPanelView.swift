@@ -283,30 +283,38 @@ struct ControlCenterPanelView: View {
                         if let cur = display.currentMode {
                             let hidpiSuffix = cur.isHiDPI ? " · HiDPI" : ""
                             let mirrorSuffix = display.isMirrored ? " (镜像)" : ""
-                            Text("\(cur.width) × \(cur.height) · \(cur.refreshRate) Hz\(hidpiSuffix)\(mirrorSuffix)")
-                                .font(.system(size: 10))
-                                .foregroundStyle(Color.secondary)
-                                .contextMenu {
-                                    if !display.isBuiltin && resController.activeDisplayCount > 1 {
-                                        Button(role: .destructive) {
-                                            resController.disconnectDisplay(display)
-                                        } label: {
-                                            Label("断开此显示器连接", systemImage: "power")
-                                        }
-                                    }
-                                    if !display.isBuiltin && hidpiService.isHiDPIInstalled(vendor: display.vendorID, product: display.productID) {
-                                        Button(role: .destructive) {
-                                            Task {
-                                                hidpiService.isWorking = true
-                                                let err = await hidpiService.disableHiDPI(vendor: display.vendorID, product: display.productID)
-                                                hidpiService.statusError = err
-                                                hidpiService.isWorking = false
-                                            }
-                                        } label: {
-                                            Label("移除 2K HiDPI 渲染配置...", systemImage: "trash")
-                                        }
+                            Group {
+                                if !display.isBuiltin && display.nativeWidth > 0 && display.nativeHeight > 0 {
+                                    let scalePrefix = cur.isHiDPI ? "看起来像 " : ""
+                                    Text("原生 \(display.nativeWidth) × \(display.nativeHeight) · \(scalePrefix)\(cur.width) × \(cur.height)\(hidpiSuffix) · \(cur.refreshRate) Hz\(mirrorSuffix)")
+                                        .font(.system(size: 9.5))
+                                } else {
+                                    Text("\(cur.width) × \(cur.height) · \(cur.refreshRate) Hz\(hidpiSuffix)\(mirrorSuffix)")
+                                        .font(.system(size: 10))
+                                }
+                            }
+                            .foregroundStyle(Color.secondary)
+                            .contextMenu {
+                                if !display.isBuiltin && resController.activeDisplayCount > 1 {
+                                    Button(role: .destructive) {
+                                        resController.disconnectDisplay(display)
+                                    } label: {
+                                        Label("断开此显示器连接", systemImage: "power")
                                     }
                                 }
+                                if !display.isBuiltin && hidpiService.isHiDPIInstalled(vendor: display.vendorID, product: display.productID) {
+                                    Button(role: .destructive) {
+                                        Task {
+                                            hidpiService.isWorking = true
+                                            let err = await hidpiService.disableHiDPI(vendor: display.vendorID, product: display.productID)
+                                            hidpiService.statusError = err
+                                            hidpiService.isWorking = false
+                                        }
+                                    } label: {
+                                        Label("移除 2K HiDPI 渲染配置...", systemImage: "trash")
+                                    }
+                                }
+                            }
                         }
                     }
 
@@ -344,22 +352,36 @@ struct ControlCenterPanelView: View {
                     }
                 } else {
                     VStack(spacing: 4) {
-                        RefinedSlider(
-                            value: $controlService.externalBrightness,
-                            range: 0...100,
-                            leftIcon: "sun.min",
-                            rightIcon: "sun.max"
-                        ) { val in
-                            controlService.setExternalBrightness(val)
-                        }
+                        if controlService.isExternalDDCSupported {
+                            if controlService.isExternalBrightnessSupported {
+                                RefinedSlider(
+                                    value: $controlService.externalBrightness,
+                                    range: 0...100,
+                                    leftIcon: "sun.min",
+                                    rightIcon: "sun.max"
+                                ) { val in
+                                    controlService.setExternalBrightness(val)
+                                }
+                            }
 
-                        RefinedSlider(
-                            value: $controlService.externalVolume,
-                            range: 0...100,
-                            leftIcon: "speaker.wave.1",
-                            rightIcon: "speaker.wave.3"
-                        ) { val in
-                            controlService.setExternalVolume(val)
+                            if controlService.isExternalVolumeSupported {
+                                RefinedSlider(
+                                    value: $controlService.externalVolume,
+                                    range: 0...100,
+                                    leftIcon: "speaker.wave.1",
+                                    rightIcon: "speaker.wave.3"
+                                ) { val in
+                                    controlService.setExternalVolume(val)
+                                }
+                            }
+                        } else {
+                            HStack {
+                                Label("DDC/CI 控制不可读取", systemImage: "exclamationmark.triangle")
+                                    .font(.system(size: 10.5))
+                                    .foregroundStyle(Color.secondary)
+                                Spacer()
+                            }
+                            .padding(.vertical, 2)
                         }
                     }
                 }
@@ -383,7 +405,8 @@ struct ControlCenterPanelView: View {
 
                         refreshRatePickerRow(for: display)
 
-                        if !hidpiService.isHiDPIInstalled(vendor: display.vendorID, product: display.productID) {
+                        let hasNativeHiDPI = display.availableResolutions.contains(where: { $0.isHiDPI })
+                        if !display.is4K && !hasNativeHiDPI && !hidpiService.isHiDPIInstalled(vendor: display.vendorID, product: display.productID) {
                             SettingDivider()
 
                             hidpiRow(for: display)
@@ -617,7 +640,14 @@ struct ControlCenterPanelView: View {
             Button("开启") {
                 Task {
                     hidpiService.isWorking = true
-                    let err = await hidpiService.enableHiDPI(vendor: display.vendorID, product: display.productID)
+                    let nativeW = display.nativeWidth > 0 ? display.nativeWidth : 2560
+                    let nativeH = display.nativeHeight > 0 ? display.nativeHeight : 1440
+                    let err = await hidpiService.enableHiDPI(
+                        vendor: display.vendorID,
+                        product: display.productID,
+                        nativeWidth: nativeW,
+                        nativeHeight: nativeH
+                    )
                     hidpiService.statusError = err
                     hidpiService.isWorking = false
                 }

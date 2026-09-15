@@ -39,6 +39,10 @@ final class DisplayControlService: ObservableObject {
     @Published var externalVolume: Double = 50
     @Published var internalBrightness: Double = 80
 
+    @Published var isExternalDDCSupported: Bool = true
+    @Published var isExternalBrightnessSupported: Bool = true
+    @Published var isExternalVolumeSupported: Bool = false
+
     @Published var isDarkMode: Bool = false
     @Published var isNightShift: Bool = false
     @Published var isTrueTone: Bool = false
@@ -140,13 +144,45 @@ final class DisplayControlService: ObservableObject {
         DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 0.05, execute: work)
     }
 
-    private func writeExternalDDC(command: UInt8, value: UInt16) {
-        let displays = AppleSiliconDDC.getIoregServicesForMatching().filter { display in
-            display.service != nil && (!display.productName.isEmpty || !display.edidUUID.isEmpty)
+    func updateFromSnapshot(_ snapshot: MonitorSnapshot) {
+        isExternalDDCSupported = snapshot.isDDCSupported
+        isExternalBrightnessSupported = snapshot.isBrightnessSupported
+        isExternalVolumeSupported = snapshot.isVolumeSupported
+        if let b = snapshot.brightness {
+            externalBrightness = b
         }
-        guard let first = displays.first else { return }
+        if let v = snapshot.volume {
+            externalVolume = v
+        }
+    }
+
+    private func writeExternalDDC(command: UInt8, value: UInt16) {
+        let externalServices = AppleSiliconDDC.getIoregServicesForMatching().filter {
+            $0.service != nil && $0.location == "External"
+        }
+        guard !externalServices.isEmpty else { return }
+
+        let monitors = DisplayDiscoveryService.shared.discoverMonitors()
+        let settings = SettingsStore.load()
+        guard let target = DisplayDiscoveryService.shared.selectTargetMonitor(
+            monitors: monitors,
+            selectedId: settings.selectedMonitorId,
+            monitorHint: settings.monitorHint
+        ) else { return }
+
+        let targetService: AnyObject? = {
+            if externalServices.count == 1 {
+                return externalServices[0].service
+            }
+            return externalServices.first(where: {
+                (!target.serialNumber.isEmpty && ($0.alphanumericSerialNumber == target.serialNumber || String($0.serialNumber) == target.serialNumber))
+                    || (!target.id.isEmpty && $0.ioDisplayLocation == target.id)
+            })?.service
+        }()
+
+        guard let service = targetService else { return }
         _ = AppleSiliconDDC.write(
-            service: first.service,
+            service: service,
             command: command,
             value: value,
             numOfWriteCycles: 1,

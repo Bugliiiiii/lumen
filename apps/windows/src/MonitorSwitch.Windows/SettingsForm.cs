@@ -12,6 +12,7 @@ internal sealed class SettingsForm : Form
     private readonly Action<AppSettings> _save;
     private readonly UpdateManager _updateManager;
     private readonly Label _monitorValue;
+    private readonly Label _displayModeValue;
     private readonly PillLabel _connectionBadge;
     private readonly PillLabel _currentValue;
     private readonly Label _statusValue;
@@ -23,6 +24,8 @@ internal sealed class SettingsForm : Form
     private readonly Panel _updateBanner;
     private readonly Label _updateLabel;
     private readonly FluentButton _installUpdateButton;
+    private readonly FluentButton _scanButton;
+    private readonly FluentButton _switchButton;
     private HotkeyModifiers _pendingModifiers;
     private Keys _pendingKey;
 
@@ -47,7 +50,7 @@ internal sealed class SettingsForm : Form
         FormBorderStyle = FormBorderStyle.FixedSingle;
         MaximizeBox = false;
         MinimizeBox = false;
-        ClientSize = new Size(500, 710);
+        ClientSize = new Size(500, 725);
         BackColor = WindowSurface;
         AutoScaleMode = AutoScaleMode.Dpi;
 
@@ -70,11 +73,20 @@ internal sealed class SettingsForm : Form
 
         _monitorValue = new Label
         {
-            Text = settings.MonitorHint,
+            Text = string.IsNullOrWhiteSpace(settings.MonitorHint) ? "外接显示器" : settings.MonitorHint,
             AutoEllipsis = true,
             Dock = DockStyle.Fill,
             Font = new Font("Segoe UI Variable Text Semibold", 12.5F),
             ForeColor = PrimaryText,
+            TextAlign = ContentAlignment.MiddleLeft,
+        };
+        _displayModeValue = new Label
+        {
+            Text = "等待检测显示器规格…",
+            AutoEllipsis = true,
+            Dock = DockStyle.Fill,
+            Font = new Font("Segoe UI", 9F),
+            ForeColor = SecondaryText,
             TextAlign = ContentAlignment.MiddleLeft,
         };
         _connectionBadge = new PillLabel("等待检测", Color.FromArgb(96, 96, 96), Color.FromArgb(242, 242, 242));
@@ -96,10 +108,10 @@ internal sealed class SettingsForm : Form
         _startupCheck = FluentCheckBox("登录 Windows 时自动启动", StartupManager.IsEnabled());
         _automaticUpdatesCheck = FluentCheckBox("自动检查更新", settings.AutomaticallyChecksForUpdates);
 
-        var scanButton = new FluentButton("扫描检测", FluentButtonKind.Secondary);
-        scanButton.Click += async (_, _) => await RunScanAsync(scanButton);
-        var switchButton = new FluentButton("切换到 Mac", FluentButtonKind.Primary);
-        switchButton.Click += async (_, _) => await RunSwitchAsync(switchButton);
+        _scanButton = new FluentButton("扫描检测", FluentButtonKind.Secondary);
+        _scanButton.Click += async (_, _) => await RunScanAsync();
+        _switchButton = new FluentButton($"切换到 {settings.MacLabel}", FluentButtonKind.Primary);
+        _switchButton.Click += async (_, _) => await RunSwitchAsync();
 
         _updateLabel = new Label
         {
@@ -126,7 +138,7 @@ internal sealed class SettingsForm : Form
         };
         main.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         main.RowStyles.Add(new RowStyle(SizeType.Absolute, 54));
-        main.RowStyles.Add(new RowStyle(SizeType.Absolute, 170));
+        main.RowStyles.Add(new RowStyle(SizeType.Absolute, 185));
         main.RowStyles.Add(new RowStyle(SizeType.Absolute, 12));
         main.RowStyles.Add(new RowStyle(SizeType.Absolute, 124));
         main.RowStyles.Add(new RowStyle(SizeType.Absolute, 12));
@@ -144,7 +156,7 @@ internal sealed class SettingsForm : Form
         header.Controls.Add(title);
         header.Controls.Add(subtitle);
         main.Controls.Add(header, 0, 0);
-        main.Controls.Add(BuildHeroCard(scanButton, switchButton), 0, 1);
+        main.Controls.Add(BuildHeroCard(), 0, 1);
         main.Controls.Add(BuildNamesCard(), 0, 3);
         main.Controls.Add(BuildPreferencesCard(), 0, 5);
 
@@ -170,15 +182,17 @@ internal sealed class SettingsForm : Form
     {
         base.OnShown(eventArgs);
         if (_updateManager.LatestRelease is { } release) ShowUpdate(release);
+        _ = RunScanAsync();
     }
 
-    private FluentCard BuildHeroCard(Control scanButton, Control switchButton)
+    private FluentCard BuildHeroCard()
     {
         var card = new FluentCard { Dock = DockStyle.Fill };
-        var layout = CardLayout(3);
-        layout.Padding = new Padding(16, 14, 16, 14);
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 45));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 52));
+        var layout = CardLayout(4);
+        layout.Padding = new Padding(16, 12, 16, 12);
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
         var monitorRow = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, BackColor = Color.White };
@@ -188,20 +202,22 @@ internal sealed class SettingsForm : Form
         monitorRow.Controls.Add(_connectionBadge, 1, 0);
         layout.Controls.Add(monitorRow, 0, 0);
 
-        var inputArea = new Panel { Dock = DockStyle.Fill, BackColor = Color.White, Padding = new Padding(0, 7, 0, 7) };
+        layout.Controls.Add(_displayModeValue, 0, 1);
+
+        var inputArea = new Panel { Dock = DockStyle.Fill, BackColor = Color.White, Padding = new Padding(0, 5, 0, 5) };
         inputArea.Controls.Add(_currentValue);
-        layout.Controls.Add(inputArea, 0, 1);
+        layout.Controls.Add(inputArea, 0, 2);
 
         var actions = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, BackColor = Color.White };
         actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 36));
         actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 64));
-        scanButton.Dock = DockStyle.Fill;
-        scanButton.Margin = new Padding(0, 0, 6, 0);
-        switchButton.Dock = DockStyle.Fill;
-        switchButton.Margin = new Padding(6, 0, 0, 0);
-        actions.Controls.Add(scanButton, 0, 0);
-        actions.Controls.Add(switchButton, 1, 0);
-        layout.Controls.Add(actions, 0, 2);
+        _scanButton.Dock = DockStyle.Fill;
+        _scanButton.Margin = new Padding(0, 0, 6, 0);
+        _switchButton.Dock = DockStyle.Fill;
+        _switchButton.Margin = new Padding(6, 0, 0, 0);
+        actions.Controls.Add(_scanButton, 0, 0);
+        actions.Controls.Add(_switchButton, 1, 0);
+        layout.Controls.Add(actions, 0, 3);
         card.Controls.Add(layout);
         return card;
     }
@@ -355,19 +371,31 @@ internal sealed class SettingsForm : Form
         UseVisualStyleBackColor = true,
     };
 
-    private async Task RunScanAsync(Control button)
+    private async Task RunScanAsync()
     {
-        button.Enabled = false;
-        _statusValue.Text = "正在读取 DDC/CI…";
+        _scanButton.Enabled = false;
+        _statusValue.Text = "正在检测显示器与 DDC/CI…";
         try
         {
             var snapshot = await _scan();
             _monitorValue.Text = snapshot.Description;
-            _connectionBadge.SetAppearance("● 在线", Color.FromArgb(15, 123, 15), Color.FromArgb(233, 247, 233));
-            _currentValue.Text = FriendlyInput(snapshot.CurrentInput);
-            _statusValue.Text = snapshot.AdvertisedInputs.Contains(_settings.MacInput)
-                ? "已检测到 HDMI 1，可以执行切换"
-                : "显示器未声明 HDMI 1，仍可按固定映射测试";
+            _displayModeValue.Text = $"原生：{snapshot.NativeResolutionText}   当前：{snapshot.CurrentModeText}";
+            if (snapshot.IsDdcSupported)
+            {
+                _connectionBadge.SetAppearance("● 在线", Color.FromArgb(15, 123, 15), Color.FromArgb(233, 247, 233));
+                _currentValue.Text = FriendlyInput(snapshot.CurrentInput);
+                _switchButton.Enabled = true;
+                _statusValue.Text = snapshot.AdvertisedInputs.Contains(_settings.MacInput)
+                    ? $"已检测到 {InputSourceCatalog.ConnectorName(_settings.MacInput)}，可以执行切换"
+                    : $"显示器未声明 {InputSourceCatalog.ConnectorName(_settings.MacInput)}，仍可按固定映射测试";
+            }
+            else
+            {
+                _connectionBadge.SetAppearance("DDC 不可读取", Color.FromArgb(164, 38, 44), Color.FromArgb(253, 237, 238));
+                _currentValue.Text = "● 当前输入不可读取";
+                _switchButton.Enabled = false;
+                _statusValue.Text = "已识别显示器型号与分辨率，但 DDC/CI 未响应（请确认显示器开启 DDC/CI）";
+            }
         }
         catch (Exception exception)
         {
@@ -376,19 +404,19 @@ internal sealed class SettingsForm : Form
         }
         finally
         {
-            button.Enabled = true;
+            _scanButton.Enabled = true;
         }
     }
 
-    private async Task RunSwitchAsync(Control button)
+    private async Task RunSwitchAsync()
     {
-        button.Enabled = false;
+        _switchButton.Enabled = false;
         _statusValue.Text = "正在发送切换命令…";
         try
         {
             await _switchToMac();
-            _currentValue.Text = $"● {_settings.MacLabel} · HDMI 1";
-            _statusValue.Text = "已发送切换到 Mac";
+            _currentValue.Text = $"● {_settings.MacLabel} · {InputSourceCatalog.ConnectorName(_settings.MacInput)}";
+            _statusValue.Text = $"已发送切换到 {_settings.MacLabel}";
         }
         catch (Exception exception)
         {
@@ -396,7 +424,7 @@ internal sealed class SettingsForm : Form
         }
         finally
         {
-            button.Enabled = true;
+            _switchButton.Enabled = true;
         }
     }
 
@@ -467,8 +495,8 @@ internal sealed class SettingsForm : Form
 
     private string FriendlyInput(byte input) => input switch
     {
-        var value when value == _settings.WindowsInput => $"● {_settings.WindowsLabel} · DisplayPort 1",
-        var value when value == _settings.MacInput => $"● {_settings.MacLabel} · HDMI 1",
+        var value when value == _settings.WindowsInput => $"● {_settings.WindowsLabel} · {InputSourceCatalog.ConnectorName(_settings.WindowsInput)}",
+        var value when value == _settings.MacInput => $"● {_settings.MacLabel} · {InputSourceCatalog.ConnectorName(_settings.MacInput)}",
         _ => $"● {InputSourceCatalog.ConnectorName(input)}",
     };
 

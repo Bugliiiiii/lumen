@@ -48,12 +48,30 @@ final class AppModel: ObservableObject {
         isBusy = true
         statusText = "正在读取 DDC/CI…"
         do {
-            let result = try ddc.scan(monitorHint: settings.monitorHint)
+            let result = try ddc.scan(selectedMonitorId: settings.selectedMonitorId, monitorHint: settings.monitorHint)
             snapshot = result
             lastTargetInput = result.currentInput
-            statusText = "已检测到输入源，可以执行切换"
+            statusText = "已检测到 \(result.name)，可以执行切换"
+            DisplayControlService.shared.updateFromSnapshot(result)
         } catch {
             if let ddcErr = error as? DDCServiceError, case .unreadableInput = ddcErr {
+                let monitors = DisplayDiscoveryService.shared.discoverMonitors()
+                if let ext = monitors.first(where: { !$0.isBuiltin }) {
+                    snapshot = MonitorSnapshot(
+                        id: ext.id,
+                        name: ext.name,
+                        serial: ext.serialNumber,
+                        currentInput: settings.macInput,
+                        connection: ext.connection,
+                        nativeWidth: ext.nativeWidth,
+                        nativeHeight: ext.nativeHeight,
+                        logicalWidth: ext.logicalWidth,
+                        logicalHeight: ext.logicalHeight,
+                        refreshRate: ext.refreshRate,
+                        isHiDPI: ext.isHiDPI,
+                        isDDCSupported: false
+                    )
+                }
                 statusText = "线材不支持状态回读（不影响切换，可在下方直接配置）"
             } else {
                 statusText = error.localizedDescription
@@ -69,10 +87,11 @@ final class AppModel: ObservableObject {
         isRefreshingInputStatus = true
         let revision = inputStateRevision
         let monitorHint = settings.monitorHint
+        let selectedId = settings.selectedMonitorId
 
         Task { [weak self] in
             let result = await Task.detached(priority: .utility) {
-                try? DDCService().scan(monitorHint: monitorHint)
+                try? DDCService().scan(selectedMonitorId: selectedId, monitorHint: monitorHint)
             }.value
             guard let self else { return }
             self.isRefreshingInputStatus = false
@@ -80,6 +99,7 @@ final class AppModel: ObservableObject {
             guard self.snapshot != result || self.lastTargetInput != result.currentInput else { return }
             self.snapshot = result
             self.lastTargetInput = result.currentInput
+            DisplayControlService.shared.updateFromSnapshot(result)
             self.settingsDidChange?()
         }
     }
@@ -91,15 +111,11 @@ final class AppModel: ObservableObject {
         defer { isBusy = false }
         statusText = "正在发送切换命令…"
         do {
-            try ddc.switchInput(monitorHint: settings.monitorHint, input: settings.windowsInput)
+            try ddc.switchInput(selectedMonitorId: settings.selectedMonitorId, monitorHint: settings.monitorHint, input: settings.windowsInput)
             lastTargetInput = settings.windowsInput
-            if let current = snapshot {
-                snapshot = MonitorSnapshot(
-                    name: current.name,
-                    serial: current.serial,
-                    currentInput: settings.windowsInput,
-                    connection: current.connection
-                )
+            if var current = snapshot {
+                current.currentInput = settings.windowsInput
+                snapshot = current
             }
             statusText = "已发送切换到 \(settings.windowsLabel)"
         } catch {
@@ -116,15 +132,11 @@ final class AppModel: ObservableObject {
         defer { isBusy = false }
         statusText = "正在发送切换命令…"
         do {
-            try ddc.switchInput(monitorHint: settings.monitorHint, input: settings.macInput)
+            try ddc.switchInput(selectedMonitorId: settings.selectedMonitorId, monitorHint: settings.monitorHint, input: settings.macInput)
             lastTargetInput = settings.macInput
-            if let current = snapshot {
-                snapshot = MonitorSnapshot(
-                    name: current.name,
-                    serial: current.serial,
-                    currentInput: settings.macInput,
-                    connection: current.connection
-                )
+            if var current = snapshot {
+                current.currentInput = settings.macInput
+                snapshot = current
             }
             statusText = "已发送切换到 \(settings.macLabel)"
         } catch {

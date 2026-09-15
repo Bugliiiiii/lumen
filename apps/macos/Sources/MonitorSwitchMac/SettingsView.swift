@@ -30,7 +30,7 @@ struct SettingsView: View {
             }
             .padding(.horizontal, 2)
 
-            // Section 1: 设备与检测 (分离操作，仅保留检测)
+            // Section 1: 设备与检测
             VStack(alignment: .leading, spacing: 5) {
                 SectionHeader(title: "显示器与状态")
 
@@ -43,15 +43,30 @@ struct SettingsView: View {
                                 .frame(width: 18)
 
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(model.snapshot?.name ?? model.settings.monitorHint)
+                                let displayName: String = {
+                                    if let name = model.snapshot?.name, !name.isEmpty {
+                                        return name
+                                    }
+                                    if !model.settings.monitorHint.isEmpty {
+                                        return model.settings.monitorHint
+                                    }
+                                    return "自动检测显示器"
+                                }()
+                                Text(displayName)
                                     .font(.system(size: 13, weight: .medium))
 
                                 HStack(spacing: 4.5) {
                                     Circle()
-                                        .fill(Color.green)
+                                        .fill(model.snapshot?.isDDCSupported == false ? Color.orange : Color.green)
                                         .frame(width: 5.5, height: 5.5)
 
-                                    Text(activeStatusText)
+                                    let statusText: String = {
+                                        if model.snapshot?.isDDCSupported == false {
+                                            return "线材不支持状态回读"
+                                        }
+                                        return activeStatusText
+                                    }()
+                                    Text(statusText)
                                         .font(.system(size: 11))
                                         .foregroundStyle(.secondary)
                                 }
@@ -64,6 +79,58 @@ struct SettingsView: View {
                         .buttonStyle(.bordered)
                         .controlSize(.small)
                         .disabled(model.isBusy)
+                    }
+
+                    if let snap = model.snapshot, snap.nativeWidth > 0 && snap.nativeHeight > 0 {
+                        Divider()
+                            .padding(.leading, 38)
+
+                        CardRow {
+                            HStack(spacing: 9) {
+                                Image(systemName: "rectangle.inset.filled")
+                                    .font(.system(size: 13))
+                                    .foregroundStyle(.secondary)
+                                    .frame(width: 18)
+
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text("显示规格")
+                                        .font(.system(size: 12))
+                                    Text("原生 \(snap.nativeResolutionText) · \(snap.logicalModeText)")
+                                        .font(.system(size: 10))
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                        } trailing: {
+                            Text("\(snap.refreshRate) Hz")
+                                .font(.system(size: 10.5))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
+                    let externalMonitors = DisplayDiscoveryService.shared.discoverMonitors().filter { !$0.isBuiltin }
+                    if externalMonitors.count > 1 {
+                        Divider()
+                            .padding(.leading, 38)
+
+                        CardRow {
+                            Text("目标显示器")
+                                .font(.system(size: 12))
+                        } trailing: {
+                            Picker("", selection: Binding(
+                                get: { model.settings.selectedMonitorId ?? externalMonitors.first?.id ?? "" },
+                                set: { newId in
+                                    model.settings.selectedMonitorId = newId
+                                    model.save()
+                                    model.scan()
+                                }
+                            )) {
+                                ForEach(externalMonitors) { mon in
+                                    Text(mon.name).tag(mon.id)
+                                }
+                            }
+                            .labelsHidden()
+                            .frame(width: 160)
+                        }
                     }
                 }
             }

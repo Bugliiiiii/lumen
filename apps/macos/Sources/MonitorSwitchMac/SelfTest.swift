@@ -1,4 +1,5 @@
 import AppKit
+@preconcurrency import AppleSiliconDDC
 import Foundation
 import SwiftUI
 
@@ -9,11 +10,12 @@ enum SelfTest {
             try checkDefaults()
             try checkConnectorNames()
             try checkSettingsRoundTrip()
+            try checkDiscoveryAndMigration()
             try checkInputStatusSynchronizer()
             try renderSettingsView()
             try renderUpdateBanner()
             try renderControlCenterView()
-            print("MonitorSwitchMac self-test: 27 assertions passed")
+            print("MonitorSwitchMac self-test: 46 assertions passed")
             return 0
         } catch {
             fputs("MonitorSwitchMac self-test failed: \(error)\n", stderr)
@@ -58,6 +60,193 @@ enum SelfTest {
         expected.automaticallyChecksForUpdates = false
         try SettingsStore.save(expected, defaults: defaults)
         try require(SettingsStore.load(defaults: defaults) == expected, "settings round trip")
+    }
+
+    private static func checkDiscoveryAndMigration() throws {
+        // 1. AOC U27E40 4K Descriptor
+        let u27e40 = DiscoveredMonitor(
+            id: "AOC-U27E40-866136197",
+            name: "AOC U27E40",
+            manufacturer: "AOC",
+            modelName: "U27E40",
+            serialNumber: "866136197",
+            displayID: 2,
+            isBuiltin: false,
+            nativeWidth: 3840,
+            nativeHeight: 2160,
+            logicalWidth: 2560,
+            logicalHeight: 1440,
+            refreshRate: 60,
+            isHiDPI: true,
+            hasNativeHiDPI: true,
+            isDDCSupported: true,
+            currentInput: 0x11,
+            isInputSupported: true,
+            isBrightnessSupported: true,
+            currentBrightness: 100,
+            isVolumeSupported: true,
+            currentVolume: 100,
+            advertisedInputs: [0x0F, 0x10, 0x11, 0x12],
+            connection: "USB-C → HDMI 1"
+        )
+        try require(u27e40.is4K, "u27e40 is 4K")
+        try require(u27e40.nativeResolutionText == "3840 × 2160", "native 4K resolution text")
+        try require(u27e40.logicalModeText == "看起来像 2560 × 1440 HiDPI", "logical mode text")
+        try require(u27e40.refreshRate == 60, "u27e40 refresh rate is 60")
+
+        // 2. Legacy KTC settings migration
+        let legacyJson = """
+        {
+            "monitorHint": "H27T22S",
+            "windowsInput": 15,
+            "macInput": 17,
+            "windowsLabel": "工作台",
+            "macLabel": "MacMini",
+            "shortcutKey": "M"
+        }
+        """.data(using: .utf8)!
+        let legacyMigrated = try JSONDecoder().decode(AppSettings.self, from: legacyJson)
+        try require(legacyMigrated.monitorHint == "", "legacy default KTC hint cleared")
+        try require(legacyMigrated.windowsLabel == "工作台", "windows label preserved")
+        try require(legacyMigrated.windowsInput == 15, "windows input preserved")
+        try require(legacyMigrated.macInput == 17, "mac input preserved")
+        try require(legacyMigrated.shortcutKey == "M", "shortcut key preserved")
+
+        let customJson = """
+        {
+            "monitorHint": "Dell-Ultrasharp"
+        }
+        """.data(using: .utf8)!
+        let customPreserved = try JSONDecoder().decode(AppSettings.self, from: customJson)
+        try require(customPreserved.monitorHint == "Dell-Ultrasharp", "custom hint preserved")
+
+        // 3. Target monitor selection with multiple displays
+        let monA = DiscoveredMonitor(
+            id: "AOC-U27E40-1",
+            name: "AOC U27E40",
+            manufacturer: "AOC",
+            modelName: "U27E40",
+            serialNumber: "1",
+            displayID: 2,
+            isBuiltin: false,
+            nativeWidth: 3840,
+            nativeHeight: 2160,
+            logicalWidth: 2560,
+            logicalHeight: 1440,
+            refreshRate: 60,
+            isHiDPI: true,
+            hasNativeHiDPI: true,
+            isDDCSupported: true,
+            currentInput: 0x11,
+            isInputSupported: true,
+            isBrightnessSupported: true,
+            currentBrightness: 80,
+            isVolumeSupported: true,
+            currentVolume: 50,
+            advertisedInputs: [0x0F, 0x11],
+            connection: "HDMI 1"
+        )
+        let monB = DiscoveredMonitor(
+            id: "DELL-U2720Q-2",
+            name: "Dell U2720Q",
+            manufacturer: "Dell",
+            modelName: "U2720Q",
+            serialNumber: "2",
+            displayID: 3,
+            isBuiltin: false,
+            nativeWidth: 3840,
+            nativeHeight: 2160,
+            logicalWidth: 2560,
+            logicalHeight: 1440,
+            refreshRate: 60,
+            isHiDPI: true,
+            hasNativeHiDPI: true,
+            isDDCSupported: true,
+            currentInput: 0x0F,
+            isInputSupported: true,
+            isBrightnessSupported: true,
+            currentBrightness: 70,
+            isVolumeSupported: false,
+            currentVolume: nil,
+            advertisedInputs: [0x0F, 0x11],
+            connection: "DisplayPort 1"
+        )
+        let ambiguousSelection = DisplayDiscoveryService.shared.selectTargetMonitor(
+            monitors: [monA, monB],
+            selectedId: nil,
+            monitorHint: ""
+        )
+        try require(ambiguousSelection == nil, "multiple monitors without selection must be ambiguous")
+        let explicitSelection = DisplayDiscoveryService.shared.selectTargetMonitor(
+            monitors: [monA, monB],
+            selectedId: "AOC-U27E40-1",
+            monitorHint: ""
+        )
+        try require(explicitSelection?.id == "AOC-U27E40-1", "explicit selection matches target")
+        let singleAutoSelection = DisplayDiscoveryService.shared.selectTargetMonitor(
+            monitors: [monA],
+            selectedId: nil,
+            monitorHint: ""
+        )
+        try require(singleAutoSelection?.id == "AOC-U27E40-1", "single external monitor auto-selected")
+
+        // 4. HiDPI injection suppression
+        let mockMode4K = DisplayModeItem(modeNumber: 1, width: 3840, height: 2160, refreshRate: 60, isHiDPI: false)
+        let mockModeHiDPI = DisplayModeItem(modeNumber: 2, width: 2560, height: 1440, refreshRate: 60, isHiDPI: true)
+        let display4K = ManagedDisplay(
+            displayID: 2,
+            name: "AOC U27E40",
+            isBuiltin: false,
+            isMain: false,
+            vendorID: 0x05E3,
+            productID: 0x2704,
+            nativeWidth: 3840,
+            nativeHeight: 2160,
+            isDDCSupported: true,
+            currentMode: mockModeHiDPI,
+            recommendedModes: [],
+            standardModes: [],
+            fineTuningModes: [],
+            availableResolutions: [mockMode4K, mockModeHiDPI],
+            availableRefreshRates: [60]
+        )
+        try require(display4K.is4K, "display is 4K")
+        try require(display4K.availableResolutions.contains(where: { $0.isHiDPI }), "display has native HiDPI")
+        let shouldShowHiDPIInjection = !display4K.is4K && !display4K.availableResolutions.contains(where: { $0.isHiDPI })
+        try require(!shouldShowHiDPIInjection, "4K native HiDPI suppresses injection action")
+
+        // 5. Unreadable DDC fallback
+        let unreadable = DiscoveredMonitor(
+            id: "AOC-U27E40-fallback",
+            name: "AOC U27E40",
+            manufacturer: "AOC",
+            modelName: "U27E40",
+            serialNumber: "",
+            displayID: 2,
+            isBuiltin: false,
+            nativeWidth: 3840,
+            nativeHeight: 2160,
+            logicalWidth: 2560,
+            logicalHeight: 1440,
+            refreshRate: 60,
+            isHiDPI: true,
+            hasNativeHiDPI: true,
+            isDDCSupported: false,
+            currentInput: nil,
+            isInputSupported: false,
+            isBrightnessSupported: false,
+            currentBrightness: nil,
+            isVolumeSupported: false,
+            currentVolume: nil,
+            advertisedInputs: [],
+            connection: "HDMI"
+        )
+        try require(unreadable.name == "AOC U27E40", "unreadable DDC leaves model visible")
+        try require(unreadable.nativeResolutionText == "3840 × 2160", "unreadable DDC leaves mode visible")
+        try require(!unreadable.isDDCSupported, "DDC marked unsupported")
+        try require(unreadable.ddcStatusText == "不可读取", "DDC status text is 不可读取")
+        try require(!unreadable.isBrightnessSupported, "unreadable brightness disabled")
+        try require(!unreadable.isVolumeSupported, "unreadable volume disabled")
     }
 
     @MainActor
